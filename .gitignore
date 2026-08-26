@@ -1,0 +1,13 @@
+node_modules/
+.pnpm-store/
+dist/
+coverage/
+svft-results/
+.env
+.env.*
+!.env.example
+*.log
+!changes.log
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,211 @@
+svft change log
+All timestamps use Asia/Calcutta (UTC+05:30).
+
+[2026-08-16 14:31:10 +05:30] Foundation bootstrap (version 0.1.0)
+- Initialized a single-package Node.js 22+ project managed with pnpm.
+- Configured TypeScript for strict checking, ESM, NodeNext module resolution,
+  declarations, source maps, unused-code checks, unchecked indexed access, and
+  exact optional property types.
+- Added a production build configuration that emits source files to dist/ while
+  excluding tests.
+- Added Commander as the only runtime dependency.
+- Added TypeScript, tsx, Vitest, ESLint, typescript-eslint, Prettier, Node.js type
+  definitions, and the ESLint JavaScript configuration as development dependencies.
+- Added the svft executable mapping to dist/cli/index.js.
+- Implemented `svft --help` and `svft --version`.
+- Implemented `svft scan <url>` as URL validation followed by a clear
+  not-implemented placeholder; no network request is performed.
+- Implemented `svft target check <url>` to validate and normalize HTTP and HTTPS
+  URLs.
+- Added clear CLI exit codes and separate standard output/error handling.
+- Added the Target model with the original input, parsed URL, and normalized URL.
+- Added the ScanContext model with a UUID, validated target, and start time.
+- Added centralized target parsing with empty-value checks, URL parsing, HTTP/HTTPS
+  protocol restrictions, hostname validation, and fragment removal.
+- Created the cli, core, scanner, discovery, rules, and types source directories.
+- Added five Vitest tests across target and CLI behavior: valid URL, invalid URL,
+  normalization, valid CLI target checking, and invalid CLI target rejection.
+- Added ESLint flat configuration with type-aware strict and stylistic rules.
+- Added Prettier configuration and formatting scripts.
+- Added Git ignores for dependencies, build output, coverage, environment files,
+  logs, editor metadata, and the workspace pnpm store.
+- Added README documentation for purpose, installation, development commands, CLI
+  examples, project status, roadmap, and license.
+- Added docs/ARCHITECTURE.md describing principles, source boundaries, the domain
+  model, command flow, and deferred components.
+- Generated pnpm-lock.yaml with pnpm install.
+- Verified dependency installation, production build, strict type checking, lint,
+  formatting, five tests, and all four compiled CLI command forms.
+
+[2026-08-26 23:20:04 +05:30] Project context and history documentation
+- Added docs/PROJECT_CONTEXT.md as the detailed source of truth for the project's
+  identity, present capabilities, exclusions, architecture, directory layout,
+  domain model, URL behavior, CLI behavior, contributor workflow, tests, build and
+  publishing state, security boundary, standing decisions, roadmap, and handoff.
+- Added changes.log with timestamped history for the foundation and the current
+  documentation update.
+- Linked the project context and change log from README.md.
+- Updated .gitignore so changes.log is tracked while other runtime *.log files
+  remain ignored.
+- Verified formatting, strict type checking, linting, and all five unit tests after
+  the documentation changes.
+
+[2026-08-26 23:29:52 +05:30] Step 2.1 - Dynamic scan configuration
+- Added the ScanConfig and ScanConfigOverrides types with timeout, retries, retry
+  delay, redirect, concurrency, crawl depth, request delay, TLS, user-agent, and
+  header settings.
+- Added the canonical default configuration: 10000 ms timeout, 2 retries, 500 ms
+  retry delay, redirects enabled with a limit of 5, concurrency 5, crawl depth 0,
+  request delay 0, TLS verification enabled, SVFT/0.1.0 user agent, and no headers.
+- Added createScanConfig() to merge partial overrides, copy headers, preserve
+  unrelated defaults, and validate numeric configuration values.
+- Added InvalidScanConfigError for clear configuration failures.
+- Added resolved ScanConfig to ScanContext and updated createScanContext() to
+  accept optional configuration overrides.
+- Added --timeout, --retries, and --retry-delay options to `svft scan`.
+- Added strict integer parsing and validation requiring a positive timeout and
+  non-negative retry count and retry delay.
+- Updated `svft scan` to print the normalized target and complete resolved
+  configuration followed by its no-scanning placeholder.
+- Added tests for default configuration, merge behavior, CLI overrides, invalid
+  timeout, and invalid retries, bringing the suite to ten tests in three files.
+- Redesigned README.md with a terminal-style SVFT identity, ASCII logo, interactive
+  examples, architecture diagram, current-capability table, roadmap table, new
+  flags, and links to project records while keeping it below 250 lines.
+- Updated docs/PROJECT_CONTEXT.md and docs/ARCHITECTURE.md for the configuration
+  model, current command flow, test coverage, and implementation boundary.
+- No HTTP requests, crawling, technology detection, browser automation, or VAPT
+  rules were added.
+
+[2026-08-26 23:53:45 +05:30] Step 2.1 configuration completion
+- Expanded `svft scan` with redirect toggles, maximum redirects, concurrency, crawl
+  depth, request delay, TLS verification, and user-agent options while deliberately
+  keeping headers internal.
+- Kept CLI responsibility to argument parsing and option-to-model mapping; all
+  configuration defaults and business validation remain in createScanConfig().
+- Added validation for maximum redirects, user agent, header values, and the
+  boolean configuration fields in addition to the existing numeric validation.
+- Changed createScanContext() to receive a completed Target and ScanConfig instead
+  of rebuilding configuration from overrides.
+- Changed scan output to a terminal-readable SVFT summary containing the target,
+  scan UUID, and every resolved configuration field.
+- Moved configuration tests to tests/core/config.test.ts and expanded coverage to
+  nineteen focused configuration cases.
+- Added a ScanContext test and expanded CLI coverage for defaults, every exposed
+  override, invalid configuration, and unaffected target checking. The suite now
+  contains twenty-nine tests in four files.
+- Reworked README examples and branding with portable ASCII, the complete option
+  table, interactive target/scan demonstrations, and the configuration-first flow.
+- Updated project context and architecture documentation with the explicit
+  CLI-to-Target-to-ScanConfig-to-ScanContext-to-future-HTTP-Engine boundary.
+- Added no dependencies and implemented no HTTP requests or future scanner work.
+
+[2026-08-27 00:14:08 +05:30] Centralized HTTP Engine
+- Added typed HTTP request, response, redirect, and categorized error models under
+  src/http/.
+- Added createHttpClient(config) as the single network entry point using Node.js
+  built-in HTTP, HTTPS, performance timing, and timer APIs; no dependency was added.
+- Added deterministic outbound header normalization and precedence for ScanConfig
+  headers, configured User-Agent, and request-specific headers.
+- Added request-local TLS certificate verification controlled by verifyTLS without
+  changing global Node.js TLS behavior.
+- Added bounded handling for 301, 302, 303, 307, and 308 redirects with ordered
+  redirect-chain tracking and a categorized redirect-limit error.
+- Added conservative retries for GET, HEAD, and OPTIONS timeout or transport
+  failures only; HTTP responses, TLS failures, aborts, and configuration errors are
+  not retried.
+- Added monotonic total response timing, UTF-8 text body collection, and lowercase
+  multi-value response headers that preserve duplicate raw values.
+- Added categorized errors for invalid requests, timeouts, connection/DNS failures,
+  TLS failures, redirect limits, unsupported protocols, and aborts with URL and
+  cause context.
+- Updated `svft scan` to perform exactly one GET and print status, final URL,
+  duration, redirect count, and response size without printing the body.
+- Preserved `svft target check` as structural validation with zero network traffic.
+- Added deterministic loopback HTTP/HTTPS fixtures and twenty-one HTTP Engine tests for
+  success, response data, headers, timing, timeout, failure, redirects, TLS, retry
+  policy, unsupported protocols, and abort behavior.
+- Updated CLI integration tests for one-request success, configuration, failure,
+  timeout, redirects, and zero-request target checking. The full suite now contains
+  fifty-two passing tests across five test files.
+- Updated README.md, docs/PROJECT_CONTEXT.md, and docs/ARCHITECTURE.md for the new
+  HTTP boundary, behavior, testing strategy, and future centralized-network rule.
+- Implemented no crawling, discovery, browser automation, technology detection,
+  authentication, vulnerability rules, payloads, reporting, database, or plugins.
+
+[2026-08-27 00:33:41 +05:30] Bounded same-origin URL discovery
+- Added DiscoveredUrl, DiscoveryFailure, and DiscoveryResult domain models.
+- Added anchor href extraction for quoted, unquoted, and case-insensitive HTML.
+- Added URL resolution for absolute, root-relative, relative, and query-only links;
+  normalization removes fragments while preserving meaningful queries.
+- Added strict same-origin enforcement across scheme, host, and effective port.
+- Added case-insensitive filtering for common image, style, script, document,
+  archive, executable, audio, and video extensions.
+- Added deterministic Set-based deduplication and a sequential FIFO queue.
+- Implemented exact crawl-depth semantics: seed depth 0, direct links depth 1,
+  and subsequent links at their corresponding depth.
+- Added Content-Type-aware HTML parsing with a conservative fallback only when
+  Content-Type is missing.
+- Reused the centralized HTTP Engine for all discovery traffic and added a
+  request-level redirect predicate to prevent cross-origin redirect traffic.
+- Used the final redirect URL as the link-resolution base and discovery parent.
+- Applied requestDelay between coordinator requests and recorded child-page
+  failures while allowing the remaining queue to continue.
+- Updated `svft scan` to print discovery depth, URL counts, optional failure count,
+  and the ordered discovered URL list. Default depth 0 requests only the seed.
+- Preserved `svft target check` as structural validation with zero requests.
+- Added 23 discovery tests covering link forms, normalization, filtering, origin,
+  depth 0/1/2, deduplication, HTML detection, redirects, delay, and failures.
+- Preserved all 52 existing tests; the suite now has 75 passing tests in 7 files.
+- Updated README, ARCHITECTURE.md, and PROJECT_CONTEXT.md for current behavior,
+  contributor usage, component boundaries, safety limits, and roadmap status.
+- Added no dependencies and implemented no vulnerability rules, payloads, forms,
+  JavaScript execution, browser automation, or technology/API detection.
+
+[2026-08-27 00:53:13 +05:30] Live progress and canonical JSON scan results
+- Added a small discovery event model for logical request starts, responses, URL
+  discoveries/skips, child request failures, and discovery completion.
+- Added optional callback-based progress reporting without console output or file
+  writes inside discovery and without exposing HTTP retry or redirect-hop noise.
+- Updated the CLI to show target/depth, numbered logical GET requests, response
+  status and duration, newly discovered-link counts, failures, and final totals.
+- Added the canonical ScanResult model with scan ID, normalized target, ISO start
+  and completion times, duration, resolved configuration, and DiscoveryResult.
+- Changed child discovery failures to plain structured code/message/URL data so
+  their useful error information survives JSON serialization.
+- Added a separate ResultWriter that creates svft-results automatically and writes
+  readable UTF-8 scan-<scanId>.json files using exclusive no-overwrite creation.
+- Updated successful scan output with the relative generated result path.
+- Kept fatal target/configuration/seed failures from writing successful results;
+  target check still creates no result directory and performs no network request.
+- Ignored runtime svft-results output in Git.
+- Added progress, ScanResult, persistence, no-overwrite, CLI JSON, and failed-scan
+  coverage using temporary directories. All 79 tests pass across 9 test files.
+- Updated README, ARCHITECTURE.md, and PROJECT_CONTEXT.md for progress, canonical
+  JSON, persistence boundaries, contributor workflow, and current limitations.
+- Added no dependencies, vulnerability rules, forms, parameters, browser or
+  technology detection, API discovery, authentication, database, or extra formats.
+
+[2026-08-27 01:12:01 +05:30] Compact dynamic scanner status
+- Replaced per-URL request/response terminal lines with one compact scanner status
+  containing requested, queued, failed, and elapsed counters.
+- Added a dependency-free CLI progress presenter with a rotating Braille spinner.
+- Derived all counters from existing DiscoveryEvent data; queued count is the
+  non-negative difference between discovered and requested URLs.
+- Added interactive TTY behavior using carriage return and clear-line control,
+  with a timer that is always stopped on completion or fatal failure.
+- Added a concise non-TTY/redirected-output fallback with no terminal controls.
+- Added stable completion output containing target, depth, discovery totals,
+  failed count, ScanResult duration, and the existing relative JSON result path.
+- Removed the discovered URL list from normal terminal output; JSON remains the
+  detailed canonical source of discovered URLs.
+- Deliberately omitted percentage completion because discovery has no known final
+  URL total while the queue is expanding.
+- Added five deterministic presenter tests without real timers, bringing the full
+  suite to 84 passing tests across 10 files.
+- Documented that discovery remains GET-only even though the HTTP request model
+  structurally supports additional methods.
+- Changed no discovery, extraction, normalization, scope, depth, queue, HTTP,
+  retry, redirect, ScanResult, JSON persistence, or concurrency behavior.
+- Added no dependency and implemented no forms, POST discovery, API discovery,
+  technology detection, vulnerability rules, payloads, or authentication.
