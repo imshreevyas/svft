@@ -29,6 +29,10 @@ function html(
   response.end(body);
 }
 
+function isApplicationPath(path: string): boolean {
+  return path !== '/robots.txt' && path !== '/sitemap.xml';
+}
+
 async function discover(
   url: string,
   overrides: ScanConfigOverrides = {},
@@ -111,6 +115,7 @@ describe('URL discovery crawler', () => {
       url: `${server.origin}/`,
       depth: 0,
       discoveredFrom: null,
+      source: 'url',
     });
     expect(result.discoveredUrls[0]).toEqual(result.seed);
   });
@@ -119,7 +124,8 @@ describe('URL discovery crawler', () => {
     const requests: string[] = [];
     const server = await track(
       startHttpServer((request, response) => {
-        requests.push(request.url ?? '');
+        if (isApplicationPath(request.url ?? ''))
+          requests.push(request.url ?? '');
         html(response, '<a href="/child">Child</a>');
       }),
     );
@@ -131,12 +137,188 @@ describe('URL discovery crawler', () => {
     expect(result.requestedCount).toBe(1);
   });
 
+  it('discovers same-origin sitemap URLs through robots without external requests', async () => {
+    const requests: string[] = [];
+    const external = await track(
+      startHttpServer(() => {
+        throw new Error('external sitemap must not be requested');
+      }),
+    );
+    const server = await track(
+      startHttpServer((request, response) => {
+        requests.push(request.url ?? '');
+        if (request.url === '/robots.txt') {
+          response.end(
+            `Sitemap: /maps/index.xml\nSitemap: ${external.origin}/external.xml`,
+          );
+        } else if (request.url === '/maps/index.xml') {
+          response.setHeader('content-type', 'application/xml');
+          response.end(
+            '<sitemapindex><sitemap><loc>/maps/pages.xml</loc></sitemap><sitemap><loc>/maps/index.xml</loc></sitemap></sitemapindex>',
+          );
+        } else if (request.url === '/maps/pages.xml') {
+          response.setHeader('content-type', 'application/xml');
+          response.end(
+            '<urlset><url><loc>/from-sitemap?x=1#frag</loc></url><url><loc>/</loc></url></urlset>',
+          );
+        } else {
+          html(response, '<html></html>');
+        }
+      }),
+    );
+
+    const result = await discover(server.origin, { crawlDepth: 1 });
+
+    expect(requests).toContain('/robots.txt');
+    expect(requests).toContain('/maps/index.xml');
+    expect(requests).toContain('/maps/pages.xml');
+    expect(requests).toContain('/from-sitemap?x=1');
+    expect(result.discoveredUrls).toContainEqual({
+      url: `${server.origin}/from-sitemap?x=1`,
+      depth: 1,
+      discoveredFrom: `${server.origin}/maps/pages.xml`,
+      source: 'sitemap',
+    });
+    expect(
+      result.endpoints?.find((endpoint) =>
+        endpoint.url.endsWith('/from-sitemap?x=1'),
+      )?.source,
+    ).toBe('sitemap');
+  });
+
+  it('uses the same-origin sitemap fallback when robots has no directive', async () => {
+    const server = await track(
+      startHttpServer((request, response) => {
+        if (request.url === '/robots.txt') {
+          response.end('User-agent: *\nDisallow: /private');
+        } else if (request.url === '/sitemap.xml') {
+          response.setHeader('content-type', 'application/xml');
+          response.end('<urlset><url><loc>/fallback-page</loc></url></urlset>');
+        } else {
+          html(response, '<html></html>');
+        }
+      }),
+    );
+
+    const result = await discover(server.origin, { crawlDepth: 1 });
+
+    expect(result.discoveredUrls).toContainEqual({
+      url: `${server.origin}/fallback-page`,
+      depth: 1,
+      discoveredFrom: `${server.origin}/sitemap.xml`,
+      source: 'sitemap',
+    });
+  });
+
+  it('discovers forms passively without additional requests', async () => {
+    const requests: string[] = [];
+    const server = await track(
+      startHttpServer((request, response) => {
+        if (isApplicationPath(request.url ?? ''))
+          requests.push(request.url ?? '');
+        html(
+          response,
+          '<form action="submit#fragment" method="post"><input name="email" required value="secret"></form>',
+        );
+      }),
+    );
+
+    const result = await discover(server.origin, { crawlDepth: 0 });
+
+    expect(requests).toEqual(['/']);
+    expect(result.forms).toEqual([
+      {
+        action: `${server.origin}/submit`,
+        method: 'POST',
+        fields: [
+          { name: 'email', type: 'input', attributes: { required: true } },
+        ],
+      },
+    ]);
+    expect(result.endpoints).toHaveLength(2);
+    expect(result.endpoints?.[0]).toMatchObject({
+      url: `${server.origin}/`,
+      method: 'GET',
+      parameters: [],
+      depth: 0,
+      discoveredFrom: null,
+      source: 'url',
+    });
+    expect(result.endpoints?.[0]?.requestFingerprint).toMatch(
+      /^[a-f0-9]{64}$/u,
+    );
+    expect(result.endpoints?.[0]?.responseFingerprint).toMatch(
+      /^[a-f0-9]{64}$/u,
+    );
+    expect(result.endpoints?.[1]).toEqual({
+      url: `${server.origin}/submit`,
+      method: 'POST',
+      parameters: [{ name: 'email', source: 'form' }],
+      depth: 0,
+      discoveredFrom: `${server.origin}/`,
+      source: 'form',
+    });
+  });
+
+  it('deduplicates duplicate forms per page while retaining page provenance', async () => {
+    const server = await track(
+      startHttpServer((request, response) => {
+        if (request.url === '/') {
+          html(
+            response,
+            '<a href="/child">Child</a><form action="/submit"><input name="q"></form><form action="/submit"><input name="q"></form>',
+          );
+          return;
+        }
+        html(response, '<form action="/submit"><input name="q"></form>');
+      }),
+    );
+
+    const result = await discover(server.origin, { crawlDepth: 1 });
+
+    expect(result.forms).toHaveLength(2);
+    expect(result.forms?.map((form) => form.action)).toEqual([
+      `${server.origin}/submit`,
+      `${server.origin}/submit`,
+    ]);
+    expect(
+      result.endpoints?.filter((endpoint) => endpoint.url.endsWith('/submit')),
+    ).toHaveLength(1);
+  });
+
+  it('deduplicates forms across repeated fetches of the same final page', async () => {
+    const server = await track(
+      startHttpServer((request, response) => {
+        if (request.url === '/') {
+          html(response, '<a href="/one">One</a><a href="/two">Two</a>');
+        } else if (request.url === '/one' || request.url === '/two') {
+          response.writeHead(302, { location: '/shared' });
+          response.end();
+        } else {
+          html(
+            response,
+            '<form action="/submit" method="post"><input name="q"></form>',
+          );
+        }
+      }),
+    );
+
+    const result = await discover(server.origin, { crawlDepth: 1 });
+
+    expect(result.forms).toHaveLength(1);
+    expect(result.forms?.[0]).toEqual({
+      action: `${server.origin}/submit`,
+      method: 'POST',
+      fields: [{ name: 'q', type: 'input', attributes: {} }],
+    });
+  });
+
   it('discovers and requests direct links at depth 1', async () => {
     const requests: string[] = [];
     const server = await track(
       startHttpServer((request, response) => {
         const path = request.url ?? '';
-        requests.push(path);
+        if (isApplicationPath(path)) requests.push(path);
         html(
           response,
           path === '/'
@@ -158,7 +340,7 @@ describe('URL discovery crawler', () => {
     const server = await track(
       startHttpServer((request, response) => {
         const path = request.url ?? '';
-        requests.push(path);
+        if (isApplicationPath(path)) requests.push(path);
 
         if (path === '/') {
           html(response, '<a href="/level-one">One</a>');
@@ -184,7 +366,7 @@ describe('URL discovery crawler', () => {
     const server = await track(
       startHttpServer((request, response) => {
         const path = request.url ?? '';
-        requests.push(path);
+        if (isApplicationPath(path)) requests.push(path);
         html(
           response,
           path === '/'
@@ -204,7 +386,8 @@ describe('URL discovery crawler', () => {
     const requests: string[] = [];
     const server = await track(
       startHttpServer((request, response) => {
-        requests.push(request.url ?? '');
+        if (isApplicationPath(request.url ?? ''))
+          requests.push(request.url ?? '');
         html(
           response,
           request.url === '/'
@@ -224,7 +407,7 @@ describe('URL discovery crawler', () => {
     const server = await track(
       startHttpServer((request, response) => {
         const path = request.url ?? '';
-        requests.push(path);
+        if (isApplicationPath(path)) requests.push(path);
 
         if (path === '/') {
           html(response, '<a href="/html">HTML</a><a href="/plain">Plain</a>');
@@ -250,7 +433,7 @@ describe('URL discovery crawler', () => {
     const server = await track(
       startHttpServer((request, response) => {
         const path = request.url ?? '';
-        requests.push(path);
+        if (isApplicationPath(path)) requests.push(path);
 
         if (path === '/') {
           response.end('<!doctype html><a href="/fallback">Fallback</a>');
@@ -270,7 +453,7 @@ describe('URL discovery crawler', () => {
     const server = await track(
       startHttpServer((request, response) => {
         const path = request.url ?? '';
-        requests.push(path);
+        if (isApplicationPath(path)) requests.push(path);
 
         if (path === '/start') {
           response.writeHead(302, { location: '/folder/index' });
@@ -290,6 +473,7 @@ describe('URL discovery crawler', () => {
       url: `${server.origin}/folder/child`,
       depth: 1,
       discoveredFrom: `${server.origin}/folder/index`,
+      source: 'url',
     });
   });
 
@@ -360,7 +544,7 @@ describe('URL discovery crawler', () => {
           return;
         }
 
-        destinationRequests += 1;
+        if (isApplicationPath(request.url ?? '')) destinationRequests += 1;
         html(response, '<html></html>');
       }),
     );
@@ -374,7 +558,8 @@ describe('URL discovery crawler', () => {
     const requests: string[] = [];
     const server = await track(
       startHttpServer((request, response) => {
-        requests.push(request.url ?? '');
+        if (isApplicationPath(request.url ?? ''))
+          requests.push(request.url ?? '');
         html(
           response,
           request.url === '/'
@@ -393,7 +578,8 @@ describe('URL discovery crawler', () => {
     const requestTimes: number[] = [];
     const server = await track(
       startHttpServer((request, response) => {
-        requestTimes.push(performance.now());
+        if (isApplicationPath(request.url ?? ''))
+          requestTimes.push(performance.now());
         html(
           response,
           request.url === '/' ? '<a href="/next">Next</a>' : '<html></html>',
@@ -416,7 +602,7 @@ describe('URL discovery crawler', () => {
     const server = await track(
       startHttpServer((request, response) => {
         const path = request.url ?? '';
-        requests.push(path);
+        if (isApplicationPath(path)) requests.push(path);
 
         if (path === '/') {
           html(

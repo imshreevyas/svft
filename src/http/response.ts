@@ -15,4 +15,6 @@ export interface HttpResponse {
   readonly body: string;
   readonly responseTime: number;
   readonly redirectChain: readonly HttpRedirect[];
+  readonly requestFingerprint?: string;
+  readonly responseFingerprint?: string;
 }

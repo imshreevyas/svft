@@ -17,6 +17,7 @@ import type {
   HttpResponse,
   HttpResponseHeaders,
 } from './response.js';
+import { fingerprintRequest, fingerprintResponse } from '../fingerprints.js';
 
 const SUPPORTED_METHODS = new Set<HttpMethod>([
   'GET',
@@ -50,6 +51,7 @@ interface SingleResponse {
   readonly statusMessage: string | undefined;
   readonly headers: HttpResponseHeaders;
   readonly body: string;
+  readonly requestFingerprint?: string;
 }
 
 export interface HttpClient {
@@ -299,7 +301,17 @@ function performSingleRequest(
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     };
     const onResponse = (response: IncomingMessage): void => {
-      collectResponse(response, url, resolveRequest, rejectRequest);
+      collectResponse(
+        response,
+        url,
+        (value) => {
+          resolveRequest({
+            ...value,
+            requestFingerprint: fingerprintRequest({ method, url, headers }),
+          });
+        },
+        rejectRequest,
+      );
     };
     let nodeRequest: ClientRequest;
 
@@ -444,7 +456,7 @@ export function createHttpClient(config: ScanConfig): HttpClient {
         const isRedirect = REDIRECT_STATUS_CODES.has(response.statusCode);
 
         if (!config.followRedirects || !isRedirect || location === undefined) {
-          return {
+          const finalResponse = {
             requestedUrl,
             finalUrl: currentUrl.href,
             statusCode: response.statusCode,
@@ -453,6 +465,13 @@ export function createHttpClient(config: ScanConfig): HttpClient {
             body: response.body,
             responseTime: performance.now() - startedAt,
             redirectChain,
+          };
+          return {
+            ...finalResponse,
+            ...(response.requestFingerprint === undefined
+              ? {}
+              : { requestFingerprint: response.requestFingerprint }),
+            responseFingerprint: fingerprintResponse(finalResponse),
           };
         }
 
@@ -467,7 +486,7 @@ export function createHttpClient(config: ScanConfig): HttpClient {
         const nextUrl = redirectUrl(location, currentUrl);
 
         if (request.canFollowRedirect?.(nextUrl) === false) {
-          return {
+          const finalResponse = {
             requestedUrl,
             finalUrl: currentUrl.href,
             statusCode: response.statusCode,
@@ -476,6 +495,13 @@ export function createHttpClient(config: ScanConfig): HttpClient {
             body: response.body,
             responseTime: performance.now() - startedAt,
             redirectChain,
+          };
+          return {
+            ...finalResponse,
+            ...(response.requestFingerprint === undefined
+              ? {}
+              : { requestFingerprint: response.requestFingerprint }),
+            responseFingerprint: fingerprintResponse(finalResponse),
           };
         }
 

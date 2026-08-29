@@ -9,32 +9,34 @@ All network traffic goes through the centralized HTTP Engine. Discovery owns URL
 ## Current flow
 
 ```text
-CLI -> Target -> ScanConfig -> ScanContext
-                                  |
-                                  v
-                         Discovery Engine ----> Progress events ----> CLI
-                         /              \
-                 HTTP Engine <------ FIFO Queue
-                                  |
-                                  v
-                          DiscoveryResult
-                                  |
-                                  v
-                            ScanResult
-                                  |
-                                  v
-                         JSON ResultWriter
+CLI -> Target -> ScanConfig -> ScanContext -> HTTP Engine
+                                             |
+                                             v
+                                  URL/Form discovery
+                                             |
+                                             v
+                                  Endpoint/Parameter inventory
+                                             |
+                                             v
+                                  Request/response fingerprints
+                                             |
+                                             v
+                                      ScanResult -> JSON
+                                             ^
+                                             |
+                                  Progress events -> CLI
 ```
 
-`Target` identifies the normalized seed. `ScanConfig` controls transport and discovery limits. `ScanContext` identifies an execution. The Discovery Engine schedules URLs and consumes responses from the HTTP Engine.
+`Target` identifies the normalized seed. `ScanConfig` controls transport and discovery limits. `ScanContext` identifies an execution. The Discovery Engine schedules URLs and consumes responses from the HTTP Engine, then builds passive endpoint/parameter inventory and fingerprint evidence.
 
 ## Source ownership
 
 - `src/cli/`: commands, option mapping, compact progress presentation, output capability detection, and exit codes.
 - `src/core/`: target normalization and configuration creation/validation.
 - `src/scanner/`: assembly of Target and ScanConfig into ScanContext.
-- `src/http/`: requests, response normalization, retries, redirects, TLS, headers, timing, and categorized failures.
-- `src/discovery/`: HTML anchor extraction, URL resolution/filtering/deduplication, FIFO traversal, and discovery results.
+- `src/http/`: requests, response normalization, retries, redirects, TLS, headers, timing, categorized failures, and fingerprint exposure.
+- `src/discovery/`: HTML anchor/form extraction, URL resolution/filtering/deduplication, FIFO traversal, endpoint/parameter inventory, and discovery results.
+- `src/fingerprints.ts`: canonical SHA-256 request/response fingerprints with sensitive-header exclusion.
 - `src/results/`: canonical ScanResult construction and exclusive UTF-8 JSON persistence.
 - `src/rules/`: reserved for future VAPT rules; currently empty.
 - `src/types/`: shared domain types.
@@ -64,6 +66,12 @@ For each eligible HTML response, discovery:
 5. Skips common static file extensions.
 6. Deduplicates with insertion-ordered sets.
 7. Appends accepted URLs to the FIFO queue.
+8. Extracts passive forms and ordered field metadata without values.
+9. Builds normalized, deduplicated endpoints and query/form parameters.
+
+Before normal URL traversal, discovery passively requests same-origin `/robots.txt` once, extracts Sitemap directives (falling back to `/sitemap.xml` when needed), and processes bounded sitemap URL/index documents. External sitemap references and sitemap loops are ignored; sitemap documents are not application endpoints. Internal limits cap processing at 32 sitemap documents and 1,000 sitemap URL entries per scan.
+
+Fetched URL evidence includes canonical request and response fingerprints. Response bodies are hashed in memory; sensitive headers are excluded from fingerprints.
 
 Declared `text/html` and `application/xhtml+xml` responses are parsed. A response with another declared media type is not parsed. If `Content-Type` is absent, only a body beginning like an HTML document is accepted as a conservative fallback.
 
@@ -71,7 +79,7 @@ Declared `text/html` and `application/xhtml+xml` responses are parsed. A respons
 
 Discovery accepts an optional synchronous event handler. It reports logical request starts, responses, discovered/skipped URLs, child request failures, and completion totals. Events expose discovery-level data only. The CLI ignores per-link discovered/skipped events so ordinary output stays concise, and it never displays internal retry or redirect-hop activity.
 
-Discovery currently issues GET requests only. The HTTP Engine can represent multiple methods structurally, but form handling and POST endpoint discovery are separate future stages.
+Discovery issues GET requests only. It records passive same-origin form metadata (including GET/POST method) without submitting forms; form endpoints are inventory data and are never requested.
 
 ## Progress presentation
 
@@ -83,7 +91,7 @@ No percentage is shown because discovery cannot know its final URL count in adva
 
 ## Models
 
-`DiscoveredUrl` contains the normalized URL, its depth, and the final URL of the page that discovered it (`null` for the seed). `DiscoveryResult` contains the seed, ordered discovered URLs, coordinator request count, and failed child URLs with structured HTTP errors.
+`DiscoveredUrl` contains the normalized URL, crawl depth, exact `discoveredFrom` source URL, and a deterministic source value (`url`, `sitemap`, or `robots`). Duplicate URL records are merged with optional provenance entries while retaining first-seen order. `DiscoveryResult` contains the seed, ordered canonical discovered URLs, passive forms (canonicalized by action/method/ordered field metadata with merged provenance), a deduplicated endpoint inventory with query/form parameter names, one consistent endpoint source (`url`, `sitemap`, `robots`, or `form`), and optional fingerprints, coordinator request count, and failed child URLs with structured HTTP errors. Endpoint identity uses method, normalized path, and query-name shape; query values remain in the retained URL.
 
 `ScanResult` is the canonical serializable scan record. It contains the ScanContext ID, normalized target, ISO start/completion times, duration in milliseconds, resolved configuration, and DiscoveryResult. It deliberately has no findings field because vulnerability testing does not exist.
 
@@ -101,7 +109,7 @@ Discovery and HTTP do not import the writer and perform no filesystem operations
 
 ## Testing
 
-Transport, discovery, and CLI integration tests use ephemeral loopback servers. Discovery coverage includes depth boundaries, URL forms, normalization, query preservation, fragments, origin/port rules, static filtering, HTML detection, redirects, deduplication, FIFO continuation, delay, and failures. HTTPS tests use repository fixtures and never alter global TLS settings.
+Transport, discovery, and CLI integration tests use ephemeral loopback servers. Discovery coverage includes depth boundaries, URL/forms, normalization, query preservation, fragments, origin/port rules, static filtering, HTML detection, redirects, deduplication, FIFO continuation, delay, failures, and passive form extraction. HTTPS tests use repository fixtures and never alter global TLS settings.
 
 ## Deferred work
 

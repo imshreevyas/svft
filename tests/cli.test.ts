@@ -60,7 +60,9 @@ describe('target check command', () => {
     let requests = 0;
     const server = await track(
       startHttpServer((_request, response) => {
-        requests += 1;
+        if (_request.url !== '/robots.txt' && _request.url !== '/sitemap.xml') {
+          requests += 1;
+        }
         response.end();
       }),
     );
@@ -98,8 +100,10 @@ describe('scan command discovery integration', () => {
   it('requests the seed and prints a concise discovery summary', async () => {
     let requests = 0;
     const server = await track(
-      startHttpServer((_request, response) => {
-        requests += 1;
+      startHttpServer((request, response) => {
+        if (request.url !== '/robots.txt' && request.url !== '/sitemap.xml') {
+          requests += 1;
+        }
         response.statusCode = 200;
         response.end('hello');
       }),
@@ -241,7 +245,9 @@ describe('scan command discovery integration', () => {
     const requestedPaths: string[] = [];
     const server = await track(
       startHttpServer((request, response) => {
-        requestedPaths.push(request.url ?? '');
+        if (request.url !== '/robots.txt' && request.url !== '/sitemap.xml') {
+          requestedPaths.push(request.url ?? '');
+        }
         if (request.url === '/start') {
           response.writeHead(302, { location: '/final' });
           response.end();

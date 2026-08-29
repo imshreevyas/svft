@@ -19,17 +19,17 @@ SVFT is an open-source, CLI-first web VAPT scanner written in TypeScript. Its cu
 
 ## Current Capability
 
-| Capability                   | Status          | Notes                                          |
-| ---------------------------- | --------------- | ---------------------------------------------- |
-| HTTP(S) target validation    | Ready           | Explicit protocol required                     |
-| Dynamic scan configuration   | Ready           | Validated defaults and CLI overrides           |
-| Centralized HTTP Engine      | Ready           | Timeout, retry, redirects, TLS, headers        |
-| URL discovery                | Ready           | HTML anchors, same origin, FIFO, bounded depth |
-| Static asset filtering       | Ready           | Common non-document extensions skipped         |
-| Compact scan status          | Ready           | Dynamic counters without URL or transport spam |
-| Canonical JSON results       | Ready           | Automatically written after successful scans   |
-| Browser/JavaScript discovery | Not implemented | No browser automation                          |
-| VAPT rules                   | Not implemented | No payloads or vulnerability tests             |
+| Capability                   | Status          | Notes                                                |
+| ---------------------------- | --------------- | ---------------------------------------------------- |
+| HTTP(S) target validation    | Ready           | Explicit protocol required                           |
+| Dynamic scan configuration   | Ready           | Validated defaults and CLI overrides                 |
+| Centralized HTTP Engine      | Ready           | Timeout, retry, redirects, TLS, headers              |
+| URL discovery                | Ready           | HTML anchors/forms, same origin, FIFO, bounded depth |
+| Static asset filtering       | Ready           | Common non-document extensions skipped               |
+| Compact scan status          | Ready           | Dynamic counters without URL or transport spam       |
+| Canonical JSON results       | Ready           | Automatically written after successful scans         |
+| Browser/JavaScript discovery | Not implemented | No browser automation                                |
+| VAPT rules                   | Not implemented | No payloads or vulnerability tests                   |
 
 ## Requirements
 
@@ -116,7 +116,13 @@ Custom headers exist in the internal configuration model but are not exposed as 
 
 ## Discovery behavior
 
-- Extracts only HTML `<a href>` links.
+- Extracts HTML `<a href>` links and passive `<form>` metadata without submitting forms.
+- Includes a deduplicated endpoint inventory with query/form parameter names and provenance; values are never stored.
+- Adds deterministic request/response fingerprints for fetched endpoint evidence and removes same-page duplicate forms.
+- Passively reads same-origin robots.txt Sitemap directives and bounded sitemap XML URLs/indexes; sitemap files are never treated as endpoints.
+- Discovered URLs retain `url` or `sitemap` source provenance; sitemap processing is capped at 32 documents and 1,000 URL entries per scan.
+- Endpoint identity uses method, path, and query-name shape; duplicate forms are collapsed canonically while cross-page provenance is retained.
+- Scan flow: Target -> ScanConfig -> ScanContext -> HTTP Engine -> URL/Form discovery -> Endpoint/Parameter inventory -> fingerprints -> ScanResult -> JSON.
 - Resolves absolute, root-relative, relative, and query-only URLs against the final response URL.
 - Removes fragments, normalizes with the shared target parser, and preserves meaningful queries.
 - Stays on the seed origin (scheme, host, and effective port must match).
@@ -125,7 +131,7 @@ Custom headers exist in the internal configuration model but are not exposed as 
 - Parses declared HTML; when `Content-Type` is absent, accepts only a conservative HTML-shaped body.
 - Uses the centralized HTTP Engine for all requests and redirects.
 - Emits small progress events; the CLI derives requested, queued, and failed counters without printing every URL.
-- Uses GET only. The HTTP Engine supports other methods structurally, but forms and POST discovery are future work.
+- Sends GET requests only; form GET/POST methods are recorded passively and never submitted.
 
 ## Inspecting Results
 

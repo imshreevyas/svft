@@ -4,6 +4,14 @@ export interface DiscoveredUrl {
   readonly url: string;
   readonly depth: number;
   readonly discoveredFrom: string | null;
+  readonly source?: 'url' | 'sitemap' | 'robots';
+  readonly provenance?: readonly DiscoveryProvenance[];
+}
+
+export interface DiscoveryProvenance {
+  readonly source: 'url' | 'sitemap' | 'robots' | 'form';
+  readonly discoveredFrom: string | null;
+  readonly depth: number;
 }
 
 export interface DiscoveryFailure {
@@ -15,11 +23,43 @@ export interface DiscoveryFailure {
   };
 }
 
+export interface DiscoveredFormField {
+  readonly name: string | null;
+  readonly type: 'input' | 'select' | 'textarea' | 'button';
+  readonly attributes: Readonly<Record<string, string | true>>;
+}
+
+export interface DiscoveredForm {
+  readonly action: string;
+  readonly method: 'GET' | 'POST';
+  readonly fields: readonly DiscoveredFormField[];
+  readonly provenance?: readonly DiscoveryProvenance[];
+}
+
+export interface DiscoveredParameter {
+  readonly name: string;
+  readonly source: 'query' | 'form';
+}
+
+export interface DiscoveredEndpoint {
+  readonly url: string;
+  readonly method: 'GET' | 'POST';
+  readonly parameters: readonly DiscoveredParameter[];
+  readonly depth: number;
+  readonly discoveredFrom: string | null;
+  readonly source: 'url' | 'sitemap' | 'robots' | 'form';
+  readonly requestFingerprint?: string;
+  readonly responseFingerprint?: string;
+  readonly provenance?: readonly DiscoveryProvenance[];
+}
+
 export interface DiscoveryResult {
   readonly seed: DiscoveredUrl;
   readonly discoveredUrls: readonly DiscoveredUrl[];
   readonly requestedCount: number;
   readonly failedUrls: readonly DiscoveryFailure[];
+  readonly forms?: readonly DiscoveredForm[];
+  readonly endpoints?: readonly DiscoveredEndpoint[];
 }
 
 interface DiscoveryProgress {

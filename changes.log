@@ -1,6 +1,44 @@
 svft change log
 All timestamps use Asia/Calcutta (UTC+05:30).
 
+[2026-08-29 01:00:00 +05:30] Documentation synchronization
+- Synchronized project, architecture, README, and change-log documentation with the implemented URL/form, endpoint/parameter, fingerprint, progress, and JSON flow.
+- Documented current passive boundaries and intentionally unimplemented scanning capabilities.
+
+[2026-08-29 01:15:00 +05:30] Passive robots and sitemap discovery
+- Added one same-origin robots.txt request per scan, Sitemap directive parsing, and optional /sitemap.xml fallback.
+- Added bounded sitemap URL/index processing with normalization, scope checks, loop prevention, queue integration, and sitemap provenance.
+- Kept sitemap documents out of endpoint inventory unless independently discovered; no HTTP Engine behavior changed.
+
+[2026-08-29 01:30:00 +05:30] Formalized discovery provenance and sitemap bounds
+- Standardized discovered URL source metadata and preserved exact source URLs independently from crawl depth.
+- Added bounded sitemap document and URL-entry processing with duplicate/loop prevention and same-origin enforcement.
+- Applied configured request delays across passive robots/sitemap retrieval and normal queue requests.
+
+[2026-08-29 01:45:00 +05:30] Consistent form and endpoint provenance
+- Kept same-page identical passive forms deduplicated by normalized action, method, and ordered field metadata while preserving cross-page records.
+- Unified endpoint source values so sitemap and form endpoints no longer carry contradictory provenance fields.
+
+[2026-08-29 02:00:00 +05:30] Form deduplication and endpoint identity correction
+- Deduplicated forms per final source page across repeated fetches while preserving cross-page records and field ordering.
+- Normalized endpoint identity to method + path + query-name shape, retaining meaningful query values in first-seen URLs.
+
+[2026-08-29 00:45:00 +05:30] Deterministic discovery fingerprints
+- Added canonical SHA-256 request and response fingerprints with normalized method, URL, headers, status, and body inputs.
+- Stored fingerprint evidence on fetched URL endpoints without persisting extra response bodies or changing network behavior.
+- Deduplicated identical forms per source page while retaining forms discovered from distinct pages.
+
+[2026-08-29 00:15:00 +05:30] Unified passive endpoint and parameter discovery
+- Added endpoint and parameter models, unifying discovered links and forms while preserving legacy result collections.
+- Extracted ordered query/form parameter names without storing values, deduplicating equivalent endpoints and parameters.
+- Added provenance-aware endpoint inventory and deterministic tests with zero additional requests.
+
+[2026-08-28 00:00:00 +05:30] Passive HTML form discovery
+- Added ordered extraction of same-origin GET/POST HTML forms and input/select/textarea/button field metadata.
+- Normalized form actions against final response URLs, removed fragments, ignored unsupported/out-of-scope actions, and never stored field values.
+- Included forms in DiscoveryResult and therefore canonical ScanResult JSON without adding requests or changing the HTTP Engine.
+- Added deterministic extraction and zero-additional-request coverage.
+
 [2026-08-16 14:31:10 +05:30] Foundation bootstrap (version 0.1.0)
 - Initialized a single-package Node.js 22+ project managed with pnpm.
 - Configured TypeScript for strict checking, ESM, NodeNext module resolution,
@@ -209,3 +247,4 @@ All timestamps use Asia/Calcutta (UTC+05:30).
   retry, redirect, ScanResult, JSON persistence, or concurrency behavior.
 - Added no dependency and implemented no forms, POST discovery, API discovery,
   technology detection, vulnerability rules, payloads, or authentication.
+- Canonicalized passive discovery inventories: duplicate normalized URLs and forms now merge deterministically while retaining first-seen ordering and provenance; endpoint parameter aggregation and fingerprints remain intact.

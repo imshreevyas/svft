@@ -6,3 +6,9 @@ export type {
   HttpResponse,
   HttpResponseHeaders,
 } from './response.js';
+export {
+  createRequestFingerprint,
+  createResponseFingerprint,
+  fingerprintRequest,
+  fingerprintResponse,
+} from '../fingerprints.js';
