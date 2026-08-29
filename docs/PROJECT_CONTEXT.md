@@ -1,6 +1,6 @@
 # Project Context
 
-Last updated: 2026-08-29 01:00:00 +05:30
+Last updated: 2026-08-29 14:15:00 +05:30
 
 ## Identity and intent
 
@@ -33,7 +33,7 @@ Implemented:
 - Discovery progress events for logical request starts, responses, link decisions, child failures, and completion.
 - Compact dynamic CLI status with requested, queued, failed, and elapsed counters.
 - One updating TTY line plus a control-character-free non-TTY fallback.
-- A canonical ScanResult containing identity, target, timing, configuration, and discovery data.
+- A canonical ScanResult containing identity, target, timing, configuration, discovery data, and a derived passive security target inventory.
 - Automatic indented UTF-8 JSON creation at `svft-results/scan-<scanId>.json` without overwriting existing results.
 - Deterministic SHA-256 request/response fingerprints and passive duplicate-form handling.
 - Passive same-origin robots.txt and bounded sitemap URL discovery.
@@ -121,7 +121,7 @@ The request model contains method, URL, request headers, optional abort signal, 
 
 `DiscoveryResult` contains the seed, ordered `discoveredUrls`, passive ordered `forms`, `requestedCount`, and `failedUrls`. A child failure is recorded while FIFO processing continues. A seed failure remains fatal for the CLI. Forms contain normalized same-origin actions, GET/POST methods, and ordered field metadata without values.
 
-It also contains an endpoint inventory. `DiscoveredEndpoint` unifies URL links and forms with one source value (`url`, `sitemap`, `robots`, or `form`), while ordered `DiscoveredParameter` entries identify query or form names without values. Endpoint identity is method + normalized path + query-name shape, so query values remain in the first-seen URL while equivalent values merge. Equivalent endpoints and parameters are deduplicated while retaining first-seen provenance. Fetched URL endpoints may include canonical request and response fingerprints; fingerprints never persist additional response bodies or form values. The implemented flow is `Target -> ScanConfig -> ScanContext -> HTTP Engine -> URL/Form discovery -> Endpoint/Parameter inventory -> request/response fingerprints -> ScanResult -> JSON`.
+It also contains an endpoint inventory. `DiscoveredEndpoint` unifies URL links and forms with one source value (`url`, `sitemap`, `robots`, or `form`), while ordered `DiscoveredParameter` entries identify query or form names without values. Endpoint identity is method + normalized path + query-name shape, so query values remain in the first-seen URL while equivalent values merge. Equivalent endpoints and parameters are deduplicated while retaining first-seen provenance. Fetched URL endpoints may include canonical request and response fingerprints; fingerprints never persist additional response bodies or form values. The implemented flow is `Target -> ScanConfig -> ScanContext -> HTTP Engine -> URL/Form discovery -> Endpoint/Parameter inventory -> request/response fingerprints -> DiscoveryResult -> Security Target Inventory -> ScanResult -> JSON`.
 
 ### Progress events
 
@@ -131,7 +131,7 @@ The CLI feeds these events to a separate compact presenter. It derives queued co
 
 ### ScanResult and persistence
 
-ScanResult is JSON-serializable and contains `scanId`, normalized `target`, ISO `startedAt` and `completedAt`, millisecond `duration`, resolved `configuration`, and the existing `discovery` result. Child HTTP failures are stored as plain code/message/URL data so JSON preserves their meaning.
+ScanResult is JSON-serializable and contains `scanId`, normalized `target`, ISO `startedAt` and `completedAt`, millisecond `duration`, resolved `configuration`, the existing `discovery` result, and `targetInventory`. Each passive security target records normalized URL, GET/POST method, first-seen source, separate parameter-name metadata, and provenance. Exact method + normalized URL is the identity; duplicate targets merge names and provenance in deterministic first-seen order. The derivation preserves concrete GET query values and performs no requests or form submissions. Child HTTP failures are stored as plain code/message/URL data so JSON preserves their meaning.
 
 After successful discovery, the CLI builds ScanResult and calls the separate ResultWriter. The writer creates `svft-results/` when needed and uses exclusive file creation for `scan-<scanId>.json`. It returns the forward-slash relative path shown in terminal output. Discovery and HTTP perform no filesystem writes.
 

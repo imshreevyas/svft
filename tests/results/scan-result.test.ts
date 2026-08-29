@@ -20,7 +20,14 @@ describe('ScanResult', () => {
         depth: 0,
         discoveredFrom: null,
       },
-      discoveredUrls: [],
+      discoveredUrls: [
+        {
+          url: target.normalizedUrl,
+          depth: 0,
+          discoveredFrom: null,
+          source: 'url',
+        },
+      ],
       requestedCount: 1,
       failedUrls: [],
     };
@@ -39,6 +46,21 @@ describe('ScanResult', () => {
       duration: 1250,
       configuration,
       discovery,
+      targetInventory: [
+        {
+          url: 'https://example.com/path',
+          method: 'GET',
+          source: 'url',
+          parameterNames: [],
+          provenance: [
+            {
+              source: 'url',
+              discoveredFrom: null,
+              depth: 0,
+            },
+          ],
+        },
+      ],
     });
   });
 });

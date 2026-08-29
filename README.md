@@ -2,11 +2,11 @@
 
 <pre>
 +------------------------------------------------------------------+
-|    <strong><em>_____ _    __ ______ ______</em><strong>          |
-|   <strong><em>/ ___/| |  / // ____//_  __/</em></strong>         |
-|   <strong><em>\__ \ | | / // /_     / /</em></strong>            |
-|  <strong><em>___/ / | |/ // __/    / /</em></strong>             |
-| <strong><em>/____/  |___//_/      /_/</em></strong>              |
+|    <strong><em>_____ _    __ ______ ______</em><strong>                                   |
+|   <strong><em>/ ___/| |  / // ____//_  __/</em></strong>                                   |
+|   <strong><em>\__ \ | | / // /_     / /</em></strong>                                      |
+|  <strong><em>___/ / | |/ // __/    / /</em></strong>                                       |
+| <strong><em>/____/  |___//_/      /_/</em></strong>                                        |
 |                                                                  |
 |  Security Vulnerability Finding Tool                             |
 |  simple | maintainable | CLI-first                               |
@@ -122,7 +122,8 @@ Custom headers exist in the internal configuration model but are not exposed as 
 - Passively reads same-origin robots.txt Sitemap directives and bounded sitemap XML URLs/indexes; sitemap files are never treated as endpoints.
 - Discovered URLs retain `url` or `sitemap` source provenance; sitemap processing is capped at 32 documents and 1,000 URL entries per scan.
 - Endpoint identity uses method, path, and query-name shape; duplicate forms are collapsed canonically while cross-page provenance is retained.
-- Scan flow: Target -> ScanConfig -> ScanContext -> HTTP Engine -> URL/Form discovery -> Endpoint/Parameter inventory -> fingerprints -> ScanResult -> JSON.
+- Derives a passive security target inventory in ScanResult from existing discovery data. Target identity is exact method plus normalized URL; duplicate targets merge parameter names and provenance in first-seen order.
+- Scan flow: Target -> ScanConfig -> ScanContext -> HTTP Engine -> URL/Form discovery -> Endpoint/Parameter inventory -> fingerprints -> DiscoveryResult -> Security Target Inventory -> ScanResult -> JSON.
 - Resolves absolute, root-relative, relative, and query-only URLs against the final response URL.
 - Removes fragments, normalizes with the shared target parser, and preserves meaningful queries.
 - Stays on the seed origin (scheme, host, and effective port must match).
@@ -142,7 +143,7 @@ svft-results/
 └── scan-<scan-id>.json
 ```
 
-The canonical result contains the scan ID, normalized target, start/completion timestamps, duration, resolved configuration, and complete discovery result—including the URL list omitted from normal terminal output. Files are created exclusively and never overwritten. Failed seed scans do not create successful result files.
+The canonical result contains the scan ID, normalized target, start/completion timestamps, duration, resolved configuration, complete discovery result, and passive security target inventory. Inventory URLs preserve concrete GET query values while parameter names remain separate metadata. Files are created exclusively and never overwritten. Failed seed scans do not create successful result files.
 
 ## Architecture
 
@@ -156,6 +157,9 @@ CLI -> Target -> ScanConfig -> ScanContext
                                   |
                                   v
                            DiscoveryResult
+                                  |
+                                  v
+                    Security Target Inventory
                                   |
                                   v
                          ScanResult -> JSON

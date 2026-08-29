@@ -1,6 +1,11 @@
 svft change log
 All timestamps use Asia/Calcutta (UTC+05:30).
 
+[2026-08-29 14:15:00 +05:30] Canonical passive security target inventory
+- Added a ScanResult-level security target inventory derived only from existing DiscoveryResult URL, form, endpoint, parameter, and provenance data.
+- Deduplicated targets by exact method plus normalized URL, preserving GET query values and first-seen order while merging parameter names and provenance.
+- Kept derivation passive with no requests, submissions, payloads, vulnerability inference, discovery changes, or new dependencies.
+
 [2026-08-29 01:00:00 +05:30] Documentation synchronization
 - Synchronized project, architecture, README, and change-log documentation with the implemented URL/form, endpoint/parameter, fingerprint, progress, and JSON flow.
 - Documented current passive boundaries and intentionally unimplemented scanning capabilities.

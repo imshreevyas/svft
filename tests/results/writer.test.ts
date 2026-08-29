@@ -38,6 +38,7 @@ const result: ScanResult = {
     requestedCount: 1,
     failedUrls: [],
   },
+  targetInventory: [],
 };
 
 beforeEach(async () => {

@@ -18,6 +18,6 @@ export type {
   DiscoveryUrlDiscoveredEvent,
   DiscoveryUrlSkippedEvent,
 } from './discovery.js';
-export type { ScanResult } from './scan-result.js';
+export type { ScanResult, SecurityTarget } from './scan-result.js';
 export type { ScanContext } from './scan-context.js';
 export type { Target } from './target.js';

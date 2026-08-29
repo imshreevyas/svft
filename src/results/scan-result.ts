@@ -3,6 +3,7 @@ import type {
   ScanContext,
   ScanResult,
 } from '../types/index.js';
+import { createSecurityTargetInventory } from './target-inventory.js';
 
 export function createScanResult(
   context: ScanContext,
@@ -20,5 +21,6 @@ export function createScanResult(
       headers: { ...context.config.headers },
     },
     discovery,
+    targetInventory: createSecurityTargetInventory(discovery),
   };
 }

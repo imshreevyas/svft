@@ -21,6 +21,12 @@ CLI -> Target -> ScanConfig -> ScanContext -> HTTP Engine
                                   Request/response fingerprints
                                              |
                                              v
+                                      DiscoveryResult
+                                             |
+                                             v
+                                  Security Target Inventory
+                                             |
+                                             v
                                       ScanResult -> JSON
                                              ^
                                              |
@@ -37,7 +43,7 @@ CLI -> Target -> ScanConfig -> ScanContext -> HTTP Engine
 - `src/http/`: requests, response normalization, retries, redirects, TLS, headers, timing, categorized failures, and fingerprint exposure.
 - `src/discovery/`: HTML anchor/form extraction, URL resolution/filtering/deduplication, FIFO traversal, endpoint/parameter inventory, and discovery results.
 - `src/fingerprints.ts`: canonical SHA-256 request/response fingerprints with sensitive-header exclusion.
-- `src/results/`: canonical ScanResult construction and exclusive UTF-8 JSON persistence.
+- `src/results/`: passive security target derivation, canonical ScanResult construction, and exclusive UTF-8 JSON persistence.
 - `src/rules/`: reserved for future VAPT rules; currently empty.
 - `src/types/`: shared domain types.
 
@@ -93,7 +99,9 @@ No percentage is shown because discovery cannot know its final URL count in adva
 
 `DiscoveredUrl` contains the normalized URL, crawl depth, exact `discoveredFrom` source URL, and a deterministic source value (`url`, `sitemap`, or `robots`). Duplicate URL records are merged with optional provenance entries while retaining first-seen order. `DiscoveryResult` contains the seed, ordered canonical discovered URLs, passive forms (canonicalized by action/method/ordered field metadata with merged provenance), a deduplicated endpoint inventory with query/form parameter names, one consistent endpoint source (`url`, `sitemap`, `robots`, or `form`), and optional fingerprints, coordinator request count, and failed child URLs with structured HTTP errors. Endpoint identity uses method, normalized path, and query-name shape; query values remain in the retained URL.
 
-`ScanResult` is the canonical serializable scan record. It contains the ScanContext ID, normalized target, ISO start/completion times, duration in milliseconds, resolved configuration, and DiscoveryResult. It deliberately has no findings field because vulnerability testing does not exist.
+`SecurityTarget` is the passive, test-ready identity derived from existing DiscoveryResult data: normalized URL, GET/POST method, first-seen source, ordered parameter names, and ordered provenance. Its identity is exact method plus normalized URL, so GET and POST remain separate and concrete GET query values are preserved. Duplicate identities merge parameter names and provenance while retaining deterministic first-seen order. Derivation performs no requests, form submissions, payload generation, or vulnerability inference.
+
+`ScanResult` is the canonical serializable scan record. It contains the ScanContext ID, normalized target, ISO start/completion times, duration in milliseconds, resolved configuration, DiscoveryResult, and the derived `targetInventory`. It deliberately has no findings field because vulnerability testing does not exist.
 
 ## Result persistence
 
@@ -109,7 +117,7 @@ Discovery and HTTP do not import the writer and perform no filesystem operations
 
 ## Testing
 
-Transport, discovery, and CLI integration tests use ephemeral loopback servers. Discovery coverage includes depth boundaries, URL/forms, normalization, query preservation, fragments, origin/port rules, static filtering, HTML detection, redirects, deduplication, FIFO continuation, delay, failures, and passive form extraction. HTTPS tests use repository fixtures and never alter global TLS settings.
+Transport, discovery, and CLI integration tests use ephemeral loopback servers. Discovery coverage includes depth boundaries, URL/forms, normalization, query preservation, fragments, origin/port rules, static filtering, HTML detection, redirects, deduplication, FIFO continuation, delay, failures, and passive form extraction. Target-inventory tests cover URL, form, sitemap, method/path identity, query preservation, metadata/provenance merging, deterministic order, and zero network traffic. HTTPS tests use repository fixtures and never alter global TLS settings.
 
 ## Deferred work
 
