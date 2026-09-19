@@ -4,13 +4,13 @@ export interface DiscoveredUrl {
   readonly url: string;
   readonly depth: number;
   readonly discoveredFrom: string | null;
-  readonly source?: 'url' | 'sitemap' | 'robots';
+  readonly source?: 'url' | 'sitemap' | 'robots' | 'javascript';
   readonly provenance?: readonly DiscoveryProvenance[];
 }
 
 export interface DiscoveryProvenance {
-  readonly source: 'url' | 'sitemap' | 'robots' | 'form';
-  readonly discoveredFrom: string | null;
+  readonly source: 'url' | 'sitemap' | 'robots' | 'form' | 'javascript';
+  readonly discoveredFrom: string;
   readonly depth: number;
 }
 
@@ -47,7 +47,7 @@ export interface DiscoveredEndpoint {
   readonly parameters: readonly DiscoveredParameter[];
   readonly depth: number;
   readonly discoveredFrom: string | null;
-  readonly source: 'url' | 'sitemap' | 'robots' | 'form';
+  readonly source: 'url' | 'sitemap' | 'robots' | 'form' | 'javascript';
   readonly requestFingerprint?: string;
   readonly responseFingerprint?: string;
   readonly provenance?: readonly DiscoveryProvenance[];

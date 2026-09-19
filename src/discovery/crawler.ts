@@ -22,9 +22,18 @@ import {
 } from './links.js';
 import { createEndpointInventory } from './endpoints.js';
 import {
+  extractJavaScriptReferences,
+  extractScriptSources,
+  isJavaScriptTextResponse,
+} from './javascript.js';
+import {
   extractSitemapLocations,
   extractSitemapReferences,
 } from './sitemap.js';
+import {
+  createDiscoveryProvenance,
+  mergeDiscoveryProvenance,
+} from './provenance.js';
 
 const MAX_SITEMAP_DOCUMENTS = 32;
 const MAX_SITEMAP_URLS = 1_000;
@@ -39,20 +48,10 @@ function formIdentity(form: DiscoveredForm): string {
       ),
     ),
   }));
-  return JSON.stringify({ action: form.action, method: form.method, fields });
-}
-
-function mergeProvenance(
-  existing: readonly DiscoveryProvenance[] | undefined,
-  item: DiscoveryProvenance,
-): readonly DiscoveryProvenance[] {
-  const values = [...(existing ?? []), item];
-  const seen = new Set<string>();
-  return values.filter((value) => {
-    const key = `${value.source}|${value.discoveredFrom ?? ''}|${String(value.depth)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
+  return JSON.stringify({
+    action: form.action,
+    method: form.method.toUpperCase(),
+    fields,
   });
 }
 
@@ -88,6 +87,7 @@ function createSeed(target: Target): DiscoveredUrl {
     depth: 0,
     discoveredFrom: null,
     source: 'url',
+    provenance: [],
   };
 }
 
@@ -104,7 +104,6 @@ export async function discoverUrls(
   const forms: DiscoveredForm[] = [];
   const formsByIdentity = new Map<string, number>();
   const processedFormPages = new Set<string>();
-  const formProvenance: { depth: number; discoveredFrom: string }[] = [];
   const requestEvidence: {
     method: 'GET' | 'POST';
     url: string;
@@ -113,6 +112,7 @@ export async function discoverUrls(
   }[] = [];
   const sitemapUrls: string[] = [];
   const seenSitemaps = new Set<string>();
+  const seenJavaScriptUrls = new Set<string>();
   let sitemapUrlCount = 0;
   const knownUrls = new Set([seed.url]);
   const discoveredUrlIndex = new Map([[seed.url, 0]]);
@@ -226,15 +226,14 @@ export async function discoverUrls(
             };
             discoveredUrls[existingIndex] = {
               ...existing,
-              provenance: mergeProvenance(
-                existing.provenance ?? [
-                  {
-                    source: existing.source ?? 'url',
-                    discoveredFrom: existing.discoveredFrom,
-                    depth: existing.depth,
-                  },
-                ],
-                provenance,
+              provenance: mergeDiscoveryProvenance(
+                existing.provenance,
+                createDiscoveryProvenance(
+                  existing.source ?? 'url',
+                  existing.discoveredFrom,
+                  existing.depth,
+                ),
+                [provenance],
               ),
             };
           }
@@ -245,6 +244,11 @@ export async function discoverUrls(
           depth: 1,
           discoveredFrom: response.finalUrl,
           source: 'sitemap',
+          provenance: createDiscoveryProvenance(
+            'sitemap',
+            response.finalUrl,
+            1,
+          ),
         };
         knownUrls.add(item.url);
         discoveredUrlIndex.set(item.url, discoveredUrls.length);
@@ -347,31 +351,19 @@ export async function discoverUrls(
             depth: current.depth,
             discoveredFrom: response.finalUrl,
           };
-          const index = formsByIdentity.get(formIdentity(form));
+          const identity = formIdentity(form);
+          const index = formsByIdentity.get(identity);
           if (index === undefined) {
-            formsByIdentity.set(formIdentity(form), forms.length);
-            forms.push({ ...form });
-            formProvenance.push({
-              depth: current.depth,
-              discoveredFrom: response.finalUrl,
-            });
+            formsByIdentity.set(identity, forms.length);
+            forms.push({ ...form, provenance: [provenance] });
           } else {
             const existing = forms[index];
             if (existing !== undefined) {
               forms[index] = {
                 ...existing,
-                provenance: mergeProvenance(
-                  existing.provenance ?? [
-                    {
-                      source: 'form',
-                      depth: formProvenance[index]?.depth ?? provenance.depth,
-                      discoveredFrom:
-                        formProvenance[index]?.discoveredFrom ??
-                        provenance.discoveredFrom,
-                    },
-                  ],
+                provenance: mergeDiscoveryProvenance(existing.provenance, [
                   provenance,
-                ),
+                ]),
               };
             }
           }
@@ -379,6 +371,135 @@ export async function discoverUrls(
         const nextDepth = current.depth + 1;
 
         if (current.depth < config.crawlDepth) {
+          for (const source of extractScriptSources(response.body)) {
+            const scriptUrl = normalizeDiscoveredUrl(source, baseUrl);
+            if (
+              scriptUrl === null ||
+              !isSameOrigin(scriptUrl, seedOrigin) ||
+              seenJavaScriptUrls.has(scriptUrl.href) ||
+              requestedUrls.has(scriptUrl.href)
+            ) {
+              continue;
+            }
+
+            seenJavaScriptUrls.add(scriptUrl.href);
+            requestedUrls.add(scriptUrl.href);
+            try {
+              if (
+                (requestedCount > 0 || passiveRequestCount > 0) &&
+                config.requestDelay > 0
+              ) {
+                await delay(config.requestDelay);
+              }
+              passiveRequestCount += 1;
+              const scriptResponse = await client.request({
+                method: 'GET',
+                url: scriptUrl,
+                headers: {},
+                canFollowRedirect: (redirectUrl) => {
+                  const normalizedRedirect = normalizeDiscoveredUrl(
+                    redirectUrl.href,
+                    redirectUrl,
+                  );
+                  if (
+                    normalizedRedirect === null ||
+                    !isSameOrigin(normalizedRedirect, seedOrigin) ||
+                    seenJavaScriptUrls.has(normalizedRedirect.href) ||
+                    requestedUrls.has(normalizedRedirect.href)
+                  ) {
+                    return false;
+                  }
+                  seenJavaScriptUrls.add(normalizedRedirect.href);
+                  requestedUrls.add(normalizedRedirect.href);
+                  return true;
+                },
+              });
+              for (const redirect of scriptResponse.redirectChain) {
+                seenJavaScriptUrls.add(redirect.fromUrl);
+                seenJavaScriptUrls.add(redirect.toUrl);
+                requestedUrls.add(redirect.fromUrl);
+                requestedUrls.add(redirect.toUrl);
+              }
+              const normalizedScriptFinalUrl = normalizeDiscoveredUrl(
+                scriptResponse.finalUrl,
+                new URL(scriptResponse.finalUrl),
+              );
+              if (normalizedScriptFinalUrl === null) continue;
+              const scriptFinalUrl = normalizedScriptFinalUrl.href;
+              seenJavaScriptUrls.add(scriptFinalUrl);
+              requestedUrls.add(scriptFinalUrl);
+
+              if (!isJavaScriptTextResponse(scriptResponse.headers)) continue;
+
+              const scriptBaseUrl = new URL(scriptFinalUrl);
+              for (const reference of extractJavaScriptReferences(
+                scriptResponse.body,
+              )) {
+                const discoveredUrl = normalizeDiscoveredUrl(
+                  reference,
+                  scriptBaseUrl,
+                );
+                if (
+                  discoveredUrl === null ||
+                  !isSameOrigin(discoveredUrl, seedOrigin) ||
+                  !isDocumentUrl(discoveredUrl)
+                ) {
+                  continue;
+                }
+
+                const provenance: DiscoveryProvenance = {
+                  source: 'javascript',
+                  discoveredFrom: scriptFinalUrl,
+                  depth: nextDepth,
+                };
+                const existingIndex = discoveredUrlIndex.get(
+                  discoveredUrl.href,
+                );
+                const existing =
+                  existingIndex === undefined
+                    ? undefined
+                    : discoveredUrls[existingIndex];
+                if (existingIndex !== undefined && existing !== undefined) {
+                  discoveredUrls[existingIndex] = {
+                    ...existing,
+                    provenance: mergeDiscoveryProvenance(
+                      existing.provenance,
+                      createDiscoveryProvenance(
+                        existing.source ?? 'url',
+                        existing.discoveredFrom,
+                        existing.depth,
+                      ),
+                      [provenance],
+                    ),
+                  };
+                  continue;
+                }
+
+                const item: DiscoveredUrl = {
+                  url: discoveredUrl.href,
+                  depth: nextDepth,
+                  discoveredFrom: scriptFinalUrl,
+                  source: 'javascript',
+                  provenance: [provenance],
+                };
+                knownUrls.add(item.url);
+                discoveredUrlIndex.set(item.url, discoveredUrls.length);
+                discoveredUrls.push(item);
+                queue.push(item);
+                pendingEvents.push({
+                  type: 'url-discovered',
+                  url: item.url,
+                  depth: item.depth,
+                  discoveredFrom: scriptFinalUrl,
+                  requestedCount,
+                  discoveredCount: discoveredUrls.length,
+                });
+              }
+            } catch {
+              // JavaScript resources are optional passive metadata.
+            }
+          }
+
           for (const href of extractAnchorHrefs(response.body)) {
             const discoveredUrl = normalizeDiscoveredUrl(href, baseUrl);
 
@@ -409,19 +530,20 @@ export async function discoverUrls(
               if (existingIndex !== undefined && existing !== undefined) {
                 discoveredUrls[existingIndex] = {
                   ...existing,
-                  provenance: mergeProvenance(
-                    existing.provenance ?? [
+                  provenance: mergeDiscoveryProvenance(
+                    existing.provenance,
+                    createDiscoveryProvenance(
+                      existing.source ?? 'url',
+                      existing.discoveredFrom,
+                      existing.depth,
+                    ),
+                    [
                       {
-                        source: existing.source ?? 'url',
-                        discoveredFrom: existing.discoveredFrom,
-                        depth: existing.depth,
+                        source: 'url',
+                        discoveredFrom: response.finalUrl,
+                        depth: nextDepth,
                       },
                     ],
-                    {
-                      source: 'url',
-                      discoveredFrom: response.finalUrl,
-                      depth: nextDepth,
-                    },
                   ),
                 };
               }
@@ -445,6 +567,11 @@ export async function discoverUrls(
               depth: nextDepth,
               discoveredFrom: response.finalUrl,
               source: 'url',
+              provenance: createDiscoveryProvenance(
+                'url',
+                response.finalUrl,
+                nextDepth,
+              ),
             };
             knownUrls.add(item.url);
             discoveredUrlIndex.set(item.url, discoveredUrls.length);
@@ -519,7 +646,7 @@ export async function discoverUrls(
     endpoints: createEndpointInventory(
       discoveredUrls,
       forms,
-      formProvenance,
+      [],
       requestEvidence,
     ),
   };

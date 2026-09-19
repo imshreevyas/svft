@@ -6,6 +6,10 @@ import type {
   DiscoveryResult,
   SecurityTarget,
 } from '../types/index.js';
+import {
+  createDiscoveryProvenance,
+  mergeDiscoveryProvenance,
+} from '../discovery/provenance.js';
 
 function normalizeUrl(value: string): string {
   const url = new URL(value);
@@ -41,21 +45,21 @@ function parameterNamesFromForm(form: DiscoveredForm): string[] {
   return names;
 }
 
-function primaryProvenance(
+function itemProvenance(
   item: Pick<
     DiscoveredUrl | DiscoveredEndpoint,
     'source' | 'discoveredFrom' | 'depth'
   >,
-): DiscoveryProvenance {
-  return {
-    source: item.source ?? 'url',
-    discoveredFrom: item.discoveredFrom,
-    depth: item.depth,
-  };
+): DiscoveryProvenance[] {
+  return createDiscoveryProvenance(
+    item.source ?? 'url',
+    item.discoveredFrom,
+    item.depth,
+  );
 }
 
 function provenanceKey(value: DiscoveryProvenance): string {
-  return `${value.source}|${value.discoveredFrom ?? ''}|${String(value.depth)}`;
+  return `${value.source}|${value.discoveredFrom}|${String(value.depth)}`;
 }
 
 function mergeUnique<T>(
@@ -113,29 +117,20 @@ export function createSecurityTargetInventory(
       method: 'GET',
       source: discoveredUrl.source ?? 'url',
       parameterNames: parameterNamesFromUrl(discoveredUrl.url),
-      provenance: mergeUnique(
-        [],
-        [primaryProvenance(discoveredUrl), ...(discoveredUrl.provenance ?? [])],
-        provenanceKey,
+      provenance: mergeDiscoveryProvenance(
+        discoveredUrl.provenance,
+        itemProvenance(discoveredUrl),
       ),
     });
   }
 
   for (const form of discovery.forms ?? []) {
-    const matchingEndpoint = discovery.endpoints?.find(
-      (endpoint) =>
-        endpoint.method === form.method &&
-        normalizeUrl(endpoint.url) === normalizeUrl(form.action),
+    const endpoint = discovery.endpoints?.find(
+      (candidate) =>
+        candidate.source === 'form' &&
+        candidate.method === form.method &&
+        normalizeUrl(candidate.url) === normalizeUrl(form.action),
     );
-    const endpointProvenance =
-      matchingEndpoint === undefined
-        ? (form.provenance ?? [
-            { source: 'form', discoveredFrom: null, depth: 0 },
-          ])
-        : [
-            primaryProvenance(matchingEndpoint),
-            ...(matchingEndpoint.provenance ?? []),
-          ];
     add({
       url: form.action,
       method: form.method,
@@ -147,25 +142,8 @@ export function createSecurityTargetInventory(
       ),
       provenance: mergeUnique(
         [],
-        [...endpointProvenance, ...(form.provenance ?? [])],
-        provenanceKey,
-      ),
-    });
-  }
-
-  for (const endpoint of discovery.endpoints ?? []) {
-    add({
-      url: endpoint.url,
-      method: endpoint.method,
-      source: endpoint.source,
-      parameterNames: mergeUnique(
-        parameterNamesFromUrl(endpoint.url),
-        endpoint.parameters.map((parameter) => parameter.name),
-        (name) => name,
-      ),
-      provenance: mergeUnique(
-        [],
-        [primaryProvenance(endpoint), ...(endpoint.provenance ?? [])],
+        form.provenance ??
+          (endpoint === undefined ? [] : itemProvenance(endpoint)),
         provenanceKey,
       ),
     });

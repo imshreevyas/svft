@@ -12,7 +12,7 @@ All network traffic goes through the centralized HTTP Engine. Discovery owns URL
 CLI -> Target -> ScanConfig -> ScanContext -> HTTP Engine
                                              |
                                              v
-                                  URL/Form discovery
+                           HTML/JS/Sitemap/Form discovery
                                              |
                                              v
                                   Endpoint/Parameter inventory
@@ -41,7 +41,7 @@ CLI -> Target -> ScanConfig -> ScanContext -> HTTP Engine
 - `src/core/`: target normalization and configuration creation/validation.
 - `src/scanner/`: assembly of Target and ScanConfig into ScanContext.
 - `src/http/`: requests, response normalization, retries, redirects, TLS, headers, timing, categorized failures, and fingerprint exposure.
-- `src/discovery/`: HTML anchor/form extraction, URL resolution/filtering/deduplication, FIFO traversal, endpoint/parameter inventory, and discovery results.
+- `src/discovery/`: HTML anchor/script/form extraction, passive JavaScript text reference extraction, URL resolution/filtering/deduplication, FIFO traversal, endpoint/parameter inventory, and discovery results.
 - `src/fingerprints.ts`: canonical SHA-256 request/response fingerprints with sensitive-header exclusion.
 - `src/results/`: passive security target derivation, canonical ScanResult construction, and exclusive UTF-8 JSON persistence.
 - `src/rules/`: reserved for future VAPT rules; currently empty.
@@ -75,6 +75,8 @@ For each eligible HTML response, discovery:
 8. Extracts passive forms and ordered field metadata without values.
 9. Builds normalized, deduplicated endpoints and query/form parameters.
 
+Within the same depth boundary, eligible HTML responses also contribute script `src` values in source order. Same-origin scripts are normalized against the HTML final URL, fetched once through the HTTP Engine, accepted only as JavaScript/plain text (or when no media type is declared), and scanned as text for conservative static URL/path string literals. Candidate validation rejects malformed percent encoding, template/code delimiters, markup-like fragments, invalid dot segments, unmatched delimiters, syntax-ending punctuation, and structurally internal path shapes before URL normalization while retaining numeric and legitimate application routes. References resolve against the script final URL, pass the existing normalization/scope/static-resource rules, and merge into the canonical queue with `javascript` provenance. Scripts are never executed, and a URL already requested as either application content or script metadata is not requested again.
+
 Before normal URL traversal, discovery passively requests same-origin `/robots.txt` once, extracts Sitemap directives (falling back to `/sitemap.xml` when needed), and processes bounded sitemap URL/index documents. External sitemap references and sitemap loops are ignored; sitemap documents are not application endpoints. Internal limits cap processing at 32 sitemap documents and 1,000 sitemap URL entries per scan.
 
 Fetched URL evidence includes canonical request and response fingerprints. Response bodies are hashed in memory; sensitive headers are excluded from fingerprints.
@@ -97,7 +99,7 @@ No percentage is shown because discovery cannot know its final URL count in adva
 
 ## Models
 
-`DiscoveredUrl` contains the normalized URL, crawl depth, exact `discoveredFrom` source URL, and a deterministic source value (`url`, `sitemap`, or `robots`). Duplicate URL records are merged with optional provenance entries while retaining first-seen order. `DiscoveryResult` contains the seed, ordered canonical discovered URLs, passive forms (canonicalized by action/method/ordered field metadata with merged provenance), a deduplicated endpoint inventory with query/form parameter names, one consistent endpoint source (`url`, `sitemap`, `robots`, or `form`), and optional fingerprints, coordinator request count, and failed child URLs with structured HTTP errors. Endpoint identity uses method, normalized path, and query-name shape; query values remain in the retained URL.
+`DiscoveredUrl` contains the normalized URL, crawl depth, exact `discoveredFrom` source URL, and a deterministic source value (`url`, `sitemap`, `robots`, or `javascript`). URLs, forms, endpoints, and SecurityTargets reuse ordered `DiscoveryProvenance` entries whose source is the actual discovery mechanism, whose `discoveredFrom` is the concrete producing URL, and whose depth is where the item was discovered. Duplicate paths merge in first-seen order; the seed has empty provenance because no source URL produced it. `DiscoveryResult` contains the seed, ordered canonical discovered URLs, passive forms (canonicalized by action/method/ordered field metadata with merged provenance), a deduplicated endpoint inventory with query/form parameter names, one consistent endpoint source (`url`, `sitemap`, `robots`, `javascript`, or `form`), and optional fingerprints, coordinator request count, and failed child URLs with structured HTTP errors. Endpoint identity uses method, normalized path, and query-name shape; query values remain in the retained URL.
 
 `SecurityTarget` is the passive, test-ready identity derived from existing DiscoveryResult data: normalized URL, GET/POST method, first-seen source, ordered parameter names, and ordered provenance. Its identity is exact method plus normalized URL, so GET and POST remain separate and concrete GET query values are preserved. Duplicate identities merge parameter names and provenance while retaining deterministic first-seen order. Derivation performs no requests, form submissions, payload generation, or vulnerability inference.
 
@@ -117,7 +119,7 @@ Discovery and HTTP do not import the writer and perform no filesystem operations
 
 ## Testing
 
-Transport, discovery, and CLI integration tests use ephemeral loopback servers. Discovery coverage includes depth boundaries, URL/forms, normalization, query preservation, fragments, origin/port rules, static filtering, HTML detection, redirects, deduplication, FIFO continuation, delay, failures, and passive form extraction. Target-inventory tests cover URL, form, sitemap, method/path identity, query preservation, metadata/provenance merging, deterministic order, and zero network traffic. HTTPS tests use repository fixtures and never alter global TLS settings.
+Transport, discovery, and CLI integration tests use ephemeral loopback servers. Discovery coverage includes depth boundaries, URL/forms/scripts, normalization, query preservation, fragments, origin/port rules, static filtering, HTML/JavaScript media detection, redirects, deduplication, FIFO continuation, delay, failures, passive form extraction, and passive JavaScript reference extraction. Target-inventory tests cover URL, form, sitemap, JavaScript, method/path identity, query preservation, metadata/provenance merging, deterministic order, and zero network traffic. HTTPS tests use repository fixtures and never alter global TLS settings.
 
 ## Deferred work
 

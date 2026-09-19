@@ -116,6 +116,7 @@ describe('URL discovery crawler', () => {
       depth: 0,
       discoveredFrom: null,
       source: 'url',
+      provenance: [],
     });
     expect(result.discoveredUrls[0]).toEqual(result.seed);
   });
@@ -178,6 +179,13 @@ describe('URL discovery crawler', () => {
       depth: 1,
       discoveredFrom: `${server.origin}/maps/pages.xml`,
       source: 'sitemap',
+      provenance: [
+        {
+          source: 'sitemap',
+          discoveredFrom: `${server.origin}/maps/pages.xml`,
+          depth: 1,
+        },
+      ],
     });
     expect(
       result.endpoints?.find((endpoint) =>
@@ -207,6 +215,13 @@ describe('URL discovery crawler', () => {
       depth: 1,
       discoveredFrom: `${server.origin}/sitemap.xml`,
       source: 'sitemap',
+      provenance: [
+        {
+          source: 'sitemap',
+          discoveredFrom: `${server.origin}/sitemap.xml`,
+          depth: 1,
+        },
+      ],
     });
   });
 
@@ -233,6 +248,13 @@ describe('URL discovery crawler', () => {
         fields: [
           { name: 'email', type: 'input', attributes: { required: true } },
         ],
+        provenance: [
+          {
+            source: 'form',
+            discoveredFrom: `${server.origin}/`,
+            depth: 0,
+          },
+        ],
       },
     ]);
     expect(result.endpoints).toHaveLength(2);
@@ -257,10 +279,17 @@ describe('URL discovery crawler', () => {
       depth: 0,
       discoveredFrom: `${server.origin}/`,
       source: 'form',
+      provenance: [
+        {
+          source: 'form',
+          discoveredFrom: `${server.origin}/`,
+          depth: 0,
+        },
+      ],
     });
   });
 
-  it('deduplicates duplicate forms per page while retaining page provenance', async () => {
+  it('deduplicates identical forms globally while retaining provenance', async () => {
     const server = await track(
       startHttpServer((request, response) => {
         if (request.url === '/') {
@@ -276,10 +305,11 @@ describe('URL discovery crawler', () => {
 
     const result = await discover(server.origin, { crawlDepth: 1 });
 
-    expect(result.forms).toHaveLength(2);
-    expect(result.forms?.map((form) => form.action)).toEqual([
-      `${server.origin}/submit`,
-      `${server.origin}/submit`,
+    expect(result.forms).toHaveLength(1);
+    expect(result.forms?.[0]?.action).toBe(`${server.origin}/submit`);
+    expect(result.forms?.[0]?.provenance).toEqual([
+      { source: 'form', discoveredFrom: `${server.origin}/`, depth: 0 },
+      { source: 'form', discoveredFrom: `${server.origin}/child`, depth: 1 },
     ]);
     expect(
       result.endpoints?.filter((endpoint) => endpoint.url.endsWith('/submit')),
@@ -310,7 +340,94 @@ describe('URL discovery crawler', () => {
       action: `${server.origin}/submit`,
       method: 'POST',
       fields: [{ name: 'q', type: 'input', attributes: {} }],
+      provenance: [
+        {
+          source: 'form',
+          discoveredFrom: `${server.origin}/shared`,
+          depth: 1,
+        },
+      ],
     });
+  });
+
+  it('uses one deterministic provenance model across URLs, forms, and endpoints', async () => {
+    const server = await track(
+      startHttpServer((request, response) => {
+        if (request.url === '/') {
+          html(
+            response,
+            '<a href="/shared?value=first">Shared</a><a href="/page-a">A</a><a href="/page-b">B</a><form action="/submit"><input name="q"></form>',
+          );
+        } else if (request.url === '/page-a') {
+          html(
+            response,
+            '<a href="/shared?value=first">Shared</a><form action="/submit"><input name="q"></form>',
+          );
+        } else if (request.url === '/page-b') {
+          html(response, '<a href="/shared?value=first">Shared</a>');
+        } else {
+          html(response, '<html></html>');
+        }
+      }),
+    );
+
+    const result = await discover(server.origin, { crawlDepth: 2 });
+    const sharedUrl = result.discoveredUrls.find((item) =>
+      item.url.endsWith('/shared?value=first'),
+    );
+    const sharedEndpoint = result.endpoints?.find((item) =>
+      item.url.endsWith('/shared?value=first'),
+    );
+    const form = result.forms?.find((item) => item.action.endsWith('/submit'));
+    const formEndpoint = result.endpoints?.find((item) =>
+      item.url.endsWith('/submit'),
+    );
+    const urlProvenance = [
+      { source: 'url', discoveredFrom: `${server.origin}/`, depth: 1 },
+      { source: 'url', discoveredFrom: `${server.origin}/page-a`, depth: 2 },
+      { source: 'url', discoveredFrom: `${server.origin}/page-b`, depth: 2 },
+    ];
+    const formProvenance = [
+      { source: 'form', discoveredFrom: `${server.origin}/`, depth: 0 },
+      {
+        source: 'form',
+        discoveredFrom: `${server.origin}/page-a`,
+        depth: 1,
+      },
+    ];
+
+    expect(sharedUrl).toMatchObject({
+      url: `${server.origin}/shared?value=first`,
+      depth: 1,
+      discoveredFrom: `${server.origin}/`,
+      source: 'url',
+      provenance: urlProvenance,
+    });
+    expect(sharedEndpoint).toMatchObject({
+      depth: 1,
+      discoveredFrom: `${server.origin}/`,
+      source: 'url',
+      provenance: urlProvenance,
+    });
+    expect(form?.provenance).toEqual(formProvenance);
+    expect(formEndpoint).toMatchObject({
+      depth: 0,
+      discoveredFrom: `${server.origin}/`,
+      source: 'form',
+      provenance: formProvenance,
+    });
+
+    const allProvenance = [
+      ...(sharedUrl?.provenance ?? []),
+      ...(sharedEndpoint?.provenance ?? []),
+      ...(form?.provenance ?? []),
+      ...(formEndpoint?.provenance ?? []),
+    ];
+    expect(
+      allProvenance.every((item) => URL.canParse(item.discoveredFrom)),
+    ).toBe(true);
+    expect(sharedUrl?.provenance).toHaveLength(3);
+    expect(form?.provenance).toHaveLength(2);
   });
 
   it('discovers and requests direct links at depth 1', async () => {
@@ -380,6 +497,181 @@ describe('URL discovery crawler', () => {
 
     expect(requests).toEqual(['/', '/same']);
     expect(result.discoveredUrls).toHaveLength(2);
+  });
+
+  it('fetches unique same-origin scripts and discovers normalized endpoints', async () => {
+    const requests: string[] = [];
+    let externalRequests = 0;
+    const external = await track(
+      startHttpServer((_request, response) => {
+        externalRequests += 1;
+        response.end('const endpoint = "/external";');
+      }),
+    );
+    const server = await track(
+      startHttpServer((request, response) => {
+        const path = request.url ?? '';
+        requests.push(path);
+        if (path === '/') {
+          html(
+            response,
+            `<script src="assets/app.js"></script><script src="/root.js"></script><script src="assets/app.js#duplicate"></script><script src="?bundle=1"></script><script src="${external.origin}/outside.js"></script>`,
+          );
+        } else if (path === '/assets/app.js') {
+          response.setHeader('content-type', 'application/javascript');
+          response.end(
+            `const values = ['/api/root', '../api/relative', 'api/local', '${server.origin}/absolute', '${external.origin}/blocked'];`,
+          );
+        } else if (path === '/root.js') {
+          response.setHeader('content-type', 'text/javascript');
+          response.end('const endpoint = "/api/from-root";');
+        } else if (path === '/?bundle=1') {
+          response.setHeader('content-type', 'text/plain');
+          response.end('const endpoint = "/api/from-query";');
+        } else {
+          html(response, '<html></html>');
+        }
+      }),
+    );
+
+    const result = await discover(server.origin, { crawlDepth: 1 });
+
+    expect(requests.filter((path) => path === '/assets/app.js')).toHaveLength(
+      1,
+    );
+    expect(requests).toContain('/root.js');
+    expect(requests).toContain('/?bundle=1');
+    expect(externalRequests).toBe(0);
+    expect(
+      result.discoveredUrls.slice(1).map((item) => ({
+        url: item.url,
+        depth: item.depth,
+        discoveredFrom: item.discoveredFrom,
+        source: item.source,
+      })),
+    ).toEqual([
+      {
+        url: `${server.origin}/api/root`,
+        depth: 1,
+        discoveredFrom: `${server.origin}/assets/app.js`,
+        source: 'javascript',
+      },
+      {
+        url: `${server.origin}/api/relative`,
+        depth: 1,
+        discoveredFrom: `${server.origin}/assets/app.js`,
+        source: 'javascript',
+      },
+      {
+        url: `${server.origin}/assets/api/local`,
+        depth: 1,
+        discoveredFrom: `${server.origin}/assets/app.js`,
+        source: 'javascript',
+      },
+      {
+        url: `${server.origin}/absolute`,
+        depth: 1,
+        discoveredFrom: `${server.origin}/assets/app.js`,
+        source: 'javascript',
+      },
+      {
+        url: `${server.origin}/api/from-root`,
+        depth: 1,
+        discoveredFrom: `${server.origin}/root.js`,
+        source: 'javascript',
+      },
+      {
+        url: `${server.origin}/api/from-query`,
+        depth: 1,
+        discoveredFrom: `${server.origin}/?bundle=1`,
+        source: 'javascript',
+      },
+    ]);
+    expect(
+      result.endpoints?.slice(1).map((endpoint) => endpoint.source),
+    ).toEqual(Array(6).fill('javascript'));
+    for (const item of result.discoveredUrls.slice(1)) {
+      expect(item.provenance).toEqual([
+        {
+          source: item.source,
+          discoveredFrom: item.discoveredFrom,
+          depth: item.depth,
+        },
+      ]);
+    }
+  });
+
+  it('merges JavaScript provenance without repeating a canonical request', async () => {
+    const requests: string[] = [];
+    const server = await track(
+      startHttpServer((request, response) => {
+        const path = request.url ?? '';
+        requests.push(path);
+        if (path === '/') {
+          html(
+            response,
+            '<a href="/existing">Existing</a><a href="/page">Page</a>',
+          );
+        } else if (path === '/page') {
+          html(response, '<script src="/page.js"></script>');
+        } else if (path === '/page.js') {
+          response.setHeader('content-type', 'application/javascript');
+          response.end('const one = "/existing"; const two = "/existing#x";');
+        } else {
+          html(response, '<html></html>');
+        }
+      }),
+    );
+
+    const result = await discover(server.origin, { crawlDepth: 2 });
+
+    expect(requests.filter((path) => path === '/existing')).toHaveLength(1);
+    expect(
+      result.discoveredUrls.find((item) => item.url.endsWith('/existing')),
+    ).toMatchObject({
+      source: 'url',
+      provenance: [
+        {
+          source: 'url',
+          discoveredFrom: `${server.origin}/`,
+          depth: 1,
+        },
+        {
+          source: 'javascript',
+          discoveredFrom: `${server.origin}/page.js`,
+          depth: 2,
+        },
+      ],
+    });
+  });
+
+  it('ignores declared non-JavaScript and malformed script text safely', async () => {
+    const requests: string[] = [];
+    const server = await track(
+      startHttpServer((request, response) => {
+        const path = request.url ?? '';
+        requests.push(path);
+        if (path === '/') {
+          html(
+            response,
+            '<script src="/not-js.js"></script><script src="/malformed.js"></script>',
+          );
+        } else if (path === '/not-js.js') {
+          html(response, '<div>"/must-not-be-discovered"</div>');
+        } else if (path === '/malformed.js') {
+          response.setHeader('content-type', 'application/javascript');
+          response.end('const broken = "');
+        } else {
+          html(response, '<html></html>');
+        }
+      }),
+    );
+
+    const result = await discover(server.origin, { crawlDepth: 1 });
+
+    expect(requests).toContain('/not-js.js');
+    expect(requests).toContain('/malformed.js');
+    expect(result.discoveredUrls).toHaveLength(1);
   });
 
   it('keeps distinct query values as distinct targets', async () => {
@@ -474,6 +766,13 @@ describe('URL discovery crawler', () => {
       depth: 1,
       discoveredFrom: `${server.origin}/folder/index`,
       source: 'url',
+      provenance: [
+        {
+          source: 'url',
+          discoveredFrom: `${server.origin}/folder/index`,
+          depth: 1,
+        },
+      ],
     });
   });
 

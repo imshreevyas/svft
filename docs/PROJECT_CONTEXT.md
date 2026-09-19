@@ -1,6 +1,6 @@
 # Project Context
 
-Last updated: 2026-08-29 14:15:00 +05:30
+Last updated: 2026-08-30 00:25:00 +05:30
 
 ## Identity and intent
 
@@ -26,6 +26,7 @@ Implemented:
 - A centralized Node.js HTTP/HTTPS client with timeout, safe retries, bounded redirects, request-local TLS policy, header precedence, response timing, and structured errors.
 - `svft scan <url>` seed fetching and bounded same-origin URL discovery.
 - HTML anchor extraction and deterministic FIFO traversal.
+- Passive same-origin JavaScript file retrieval and conservative URL/path extraction without execution, including structural code-fragment and internal-path rejection.
 - Passive HTML form extraction with normalized same-origin actions and field metadata.
 - URL resolution, normalization, origin enforcement, static-resource filtering, and deduplication.
 - Discovery depth and inter-request delay controls.
@@ -37,7 +38,7 @@ Implemented:
 - Automatic indented UTF-8 JSON creation at `svft-results/scan-<scanId>.json` without overwriting existing results.
 - Deterministic SHA-256 request/response fingerprints and passive duplicate-form handling.
 - Passive same-origin robots.txt and bounded sitemap URL discovery.
-- Every discovered URL carries a deterministic `source` (`url`, `sitemap`, or `robots`); current application URLs use `url` or `sitemap` and robots directives identify sitemap sources only.
+- Every discovered URL carries a deterministic `source` (`url`, `sitemap`, `robots`, or `javascript`).
 - Production compilation to `dist/cli/index.js` and global local linking.
 - Deterministic tests using loopback HTTP/HTTPS servers.
 
@@ -117,11 +118,12 @@ The request model contains method, URL, request headers, optional abort signal, 
 - `url`: normalized HTTP(S) URL.
 - `depth`: seed `0`, direct links `1`, and so on.
 - `discoveredFrom`: final URL of the parent response, or `null` for the seed.
-- `source`: deterministic discovery source (`url` for HTML/seed URLs, `sitemap` for sitemap entries; `robots` is reserved for direct robots-source metadata).
+- `source`: deterministic discovery source (`url` for HTML/seed URLs, `sitemap` for sitemap entries, `javascript` for passive script-text references; `robots` is reserved for direct robots-source metadata).
+- `provenance`: ordered, deduplicated `DiscoveryProvenance` entries for every concrete discovery path; the seed has an empty list because no source URL produced it.
 
-`DiscoveryResult` contains the seed, ordered `discoveredUrls`, passive ordered `forms`, `requestedCount`, and `failedUrls`. A child failure is recorded while FIFO processing continues. A seed failure remains fatal for the CLI. Forms contain normalized same-origin actions, GET/POST methods, and ordered field metadata without values.
+`DiscoveryResult` contains the seed, ordered `discoveredUrls`, passive ordered `forms`, `requestedCount`, and `failedUrls`. A child failure is recorded while FIFO processing continues. A seed failure remains fatal for the CLI. Forms contain normalized same-origin actions, GET/POST methods, ordered field metadata without values, and the same provenance representation as URLs.
 
-It also contains an endpoint inventory. `DiscoveredEndpoint` unifies URL links and forms with one source value (`url`, `sitemap`, `robots`, or `form`), while ordered `DiscoveredParameter` entries identify query or form names without values. Endpoint identity is method + normalized path + query-name shape, so query values remain in the first-seen URL while equivalent values merge. Equivalent endpoints and parameters are deduplicated while retaining first-seen provenance. Fetched URL endpoints may include canonical request and response fingerprints; fingerprints never persist additional response bodies or form values. The implemented flow is `Target -> ScanConfig -> ScanContext -> HTTP Engine -> URL/Form discovery -> Endpoint/Parameter inventory -> request/response fingerprints -> DiscoveryResult -> Security Target Inventory -> ScanResult -> JSON`.
+It also contains an endpoint inventory. `DiscoveredEndpoint` unifies URL links, passive JavaScript references, and forms with one source value (`url`, `sitemap`, `robots`, `javascript`, or `form`), while ordered `DiscoveredParameter` entries identify query or form names without values. Endpoint identity is method + normalized path + query-name shape, so query values remain in the first-seen URL while equivalent values merge. Equivalent endpoints and parameters are deduplicated while retaining first-seen provenance. Across URLs, forms, endpoints, and SecurityTargets, each provenance entry means the actual mechanism, concrete producing URL, and discovery depth; multiple paths merge in first-seen order without inferred entries. Fetched URL endpoints may include canonical request and response fingerprints; fingerprints never persist additional response bodies or form values. The implemented flow is `Target -> ScanConfig -> ScanContext -> HTTP Engine -> HTML/sitemap/JavaScript/form discovery -> Endpoint/Parameter inventory -> request/response fingerprints -> DiscoveryResult -> Security Target Inventory -> ScanResult -> JSON`.
 
 ### Progress events
 
@@ -141,7 +143,7 @@ The Discovery Engine uses the centralized HTTP client and one sequential FIFO wo
 
 - The seed is always included at depth `0` and requested once by the coordinator.
 - Pages at the maximum depth are requested but not expanded.
-- Anchor `href` values, passive HTML forms, endpoint parameters, and same-origin sitemap URLs are extracted; scripts, CSS, and browser state are ignored. Form actions and sitemap references are normalized against final response URLs, unsupported or out-of-scope references are ignored, and no form is submitted.
+- Anchor `href` values, script `src` values, passive HTML forms, endpoint parameters, and same-origin sitemap URLs are extracted. Same-origin scripts are fetched as text through the HTTP Engine and conservatively scanned for static absolute HTTP(S), root-relative, safe relative, and common API-like path strings. JavaScript is never executed; CSS and browser state remain ignored.
 - Absolute HTTP(S), root-relative, path-relative, and query-only references are supported.
 - References resolve against the final response URL after redirects.
 - Fragments are removed; meaningful query strings remain.
@@ -149,6 +151,7 @@ The Discovery Engine uses the centralized HTTP client and one sequential FIFO wo
 - Scheme, hostname, and effective port must match the seed origin.
 - `jpg`, `jpeg`, `png`, `gif`, `svg`, `webp`, `css`, `js`, `pdf`, `zip`, `exe`, `mp3`, and `mp4` paths are skipped case-insensitively.
 - Sets preserve first-seen ordering and prevent duplicate queue/request work.
+- Script sources resolve against the HTML response final URL, script references resolve against the script response final URL, and both use existing normalization and exact-origin scope checks. Candidate validation rejects malformed percent encoding, template/code delimiters, markup-like fragments, invalid dot segments, unmatched delimiters, syntax-ending punctuation, and structurally internal path shapes while retaining numeric and legitimate application routes. Duplicate scripts are fetched once; references merge into existing canonical URLs with `javascript` provenance and never cause a repeat canonical request.
 - `text/html` and `application/xhtml+xml` are parsed. A conflicting declared type is never parsed. Missing Content-Type uses a conservative HTML prefix check.
 - `requestDelay` is awaited between coordinator requests, not before the first.
 - Redirect hops and retries stay inside the HTTP Engine. Cross-origin redirects are not followed.
@@ -210,7 +213,7 @@ The global link targets this checkout. Re-run `pnpm build` after source edits. T
 
 ## Testing position
 
-The suite contains focused deterministic tests for endpoint and parameter extraction in addition to discovery events, JSON persistence, target checking, and fatal scan behavior.
+The suite contains focused deterministic tests for endpoint and parameter extraction, passive JavaScript source/reference discovery, discovery events, JSON persistence, target checking, and fatal scan behavior.
 
 Tests use ephemeral loopback servers and no public internet. HTTPS uses repository-only fixtures and keeps TLS changes request-local. Servers, sockets, and timers are cleaned up.
 

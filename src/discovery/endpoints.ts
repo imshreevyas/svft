@@ -3,8 +3,11 @@ import type {
   DiscoveredForm,
   DiscoveredParameter,
   DiscoveredUrl,
-  DiscoveryProvenance,
 } from '../types/index.js';
+import {
+  createDiscoveryProvenance,
+  mergeDiscoveryProvenance,
+} from './provenance.js';
 
 function queryParameters(url: string): DiscoveredParameter[] {
   const parameters: DiscoveredParameter[] = [];
@@ -53,21 +56,6 @@ function mergeParameters(
   return merged;
 }
 
-function mergeProvenance(
-  existing: readonly DiscoveryProvenance[] | undefined,
-  additional: readonly DiscoveryProvenance[] | undefined,
-  primary: DiscoveryProvenance,
-): readonly DiscoveryProvenance[] {
-  const values = [...(existing ?? []), ...(additional ?? []), primary];
-  const seen = new Set<string>();
-  return values.filter((value) => {
-    const key = `${value.source}|${value.discoveredFrom ?? ''}|${String(value.depth)}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
 function endpointIdentity(method: 'GET' | 'POST', url: string): string {
   const parsed = new URL(url);
   const names = [
@@ -111,19 +99,10 @@ export function createEndpointInventory(
     endpoints[index] = {
       ...existing,
       parameters: mergeParameters(existing.parameters, endpoint.parameters),
-      ...(endpoint.provenance === undefined && existing.provenance === undefined
-        ? {}
-        : {
-            provenance: mergeProvenance(
-              existing.provenance,
-              endpoint.provenance,
-              {
-                source: endpoint.source,
-                discoveredFrom: endpoint.discoveredFrom,
-                depth: endpoint.depth,
-              },
-            ),
-          }),
+      provenance: mergeDiscoveryProvenance(
+        existing.provenance,
+        endpoint.provenance,
+      ),
     };
   };
 
@@ -136,9 +115,14 @@ export function createEndpointInventory(
       depth: discoveredUrl.depth,
       discoveredFrom: discoveredUrl.discoveredFrom,
       source: discoveredUrl.source ?? 'url',
-      ...(discoveredUrl.provenance === undefined
-        ? {}
-        : { provenance: discoveredUrl.provenance }),
+      provenance: mergeDiscoveryProvenance(
+        discoveredUrl.provenance,
+        createDiscoveryProvenance(
+          discoveredUrl.source ?? 'url',
+          discoveredUrl.discoveredFrom,
+          discoveredUrl.depth,
+        ),
+      ),
       ...(item?.requestFingerprint === undefined
         ? {}
         : { requestFingerprint: item.requestFingerprint }),
@@ -153,6 +137,15 @@ export function createEndpointInventory(
       depth: 0,
       discoveredFrom: null,
     };
+    const resolvedProvenance = mergeDiscoveryProvenance(
+      form.provenance,
+      createDiscoveryProvenance(
+        'form',
+        provenance.discoveredFrom,
+        provenance.depth,
+      ),
+    );
+    const primary = resolvedProvenance[0];
     const item = evidenceByKey.get(`${form.method}:${form.action}`);
     add({
       url: form.action,
@@ -161,10 +154,10 @@ export function createEndpointInventory(
         queryParameters(form.action),
         formParameters(form),
       ),
-      depth: provenance.depth,
-      discoveredFrom: provenance.discoveredFrom,
+      depth: primary?.depth ?? provenance.depth,
+      discoveredFrom: primary?.discoveredFrom ?? provenance.discoveredFrom,
       source: 'form',
-      ...(form.provenance === undefined ? {} : { provenance: form.provenance }),
+      provenance: resolvedProvenance,
       ...(item?.requestFingerprint === undefined
         ? {}
         : { requestFingerprint: item.requestFingerprint }),

@@ -52,13 +52,7 @@ describe('ScanResult', () => {
           method: 'GET',
           source: 'url',
           parameterNames: [],
-          provenance: [
-            {
-              source: 'url',
-              discoveredFrom: null,
-              depth: 0,
-            },
-          ],
+          provenance: [],
         },
       ],
     });

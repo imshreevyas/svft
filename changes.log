@@ -1,6 +1,42 @@
 svft change log
 All timestamps use Asia/Calcutta (UTC+05:30).
 
+[2026-09-19 13:38:50 +05:30] Unified Discovery provenance semantics
+- Reused the shared DiscoveryProvenance representation across discovered URLs, forms, endpoints, and SecurityTargets, with concrete producing URLs, discovery-time depths, and actual mechanisms.
+- Merged multiple real discovery paths deterministically in first-seen order and stopped fabricating a null-parent provenance entry for the seed.
+- Added regression coverage for direct and multi-page URL discovery, matching form and endpoint provenance, correct depths, concrete source URLs, query-value preservation, and absence of invented paths.
+
+[2026-09-19 13:18:25 +05:30] Preserve concrete SecurityTarget URLs
+- Derived SecurityTargets from concrete discovered URLs and forms instead of aggregated endpoint representatives, preserving exact method-plus-URL identity, query values, and first-seen order.
+- Kept endpoint shape aggregation unchanged and retained only exact existing form provenance as endpoint metadata; endpoint records no longer create SecurityTargets.
+- Added regression coverage for aggregated query shapes, exact duplicate deduplication, GET/POST separation, parameter values and names, ordering, and non-fabricated provenance.
+
+[2026-08-30 00:45:00 +05:30] Replaced JavaScript candidate heuristics with structural validation
+- Removed framework/site-specific path-name filtering in favor of complete-reference URL validation, delimiter balancing, whitespace/control rejection, syntax-boundary checks, and structural internal-path detection.
+- Preserved valid absolute, relative, root-relative, query, numeric, nested, and punctuated application routes without extra requests or HTTP changes.
+- Added deterministic regression coverage for malformed/code-like candidates and existing JavaScript discovery/canonical deduplication.
+
+[2026-08-30 00:40:00 +05:30] Structural JavaScript candidate validation
+- Replaced framework-name filtering with complete-reference validation, delimiter balancing, syntax-boundary checks, valid percent encoding, and structural internal-path heuristics.
+- Preserved legitimate application paths and punctuation inside valid URLs without extra requests or HTTP changes.
+- Added deterministic coverage for malformed, incomplete, code-like, punctuation-boundary, and valid route candidates.
+
+[2026-08-30 00:30:00 +05:30] Improved passive JavaScript URL precision
+- Rejected structural framework/runtime internals including `node_modules`, `dist/compiled`, underscore-prefixed roots, and at-prefixed module roots.
+- Preserved valid API, REST, authentication, dashboard, nested, numeric, query-string, and same-origin absolute routes without additional requests or transport changes.
+- Added deterministic regression coverage for framework false positives, malformed/code-like candidates, and legitimate application paths.
+
+[2026-08-30 00:25:00 +05:30] Hardened passive JavaScript URL validation
+- Rejected malformed percent encodings, template/code delimiters, markup-like fragments, and invalid dot segments before canonicalization.
+- Preserved numeric routes and legitimate API, REST, authentication, nested, query-string, and same-origin absolute paths without adding requests or changing HTTP behavior.
+- Added deterministic regression coverage for false positives and retained JavaScript discovery/canonical deduplication behavior.
+
+[2026-08-29 23:35:00 +05:30] Passive JavaScript URL and endpoint discovery
+- Added source-ordered script src extraction, same-origin JavaScript GETs through the existing HTTP Engine, and text-only conservative URL/path reference extraction without execution.
+- Reused target normalization, origin/static filtering, crawl depth, request delay, canonical URL/request deduplication, endpoint identity, and deterministic first-seen ordering.
+- Added `javascript` provenance with each script final URL as `discoveredFrom`, merging duplicate targets without repeat canonical requests.
+- Added deterministic loopback and extraction tests for relative/query/root script sources, scope rejection, relative/absolute/API-like references, duplicate scripts/endpoints, malformed or non-JavaScript responses, and preserved HTML/sitemap/form behavior.
+
 [2026-08-29 14:15:00 +05:30] Canonical passive security target inventory
 - Added a ScanResult-level security target inventory derived only from existing DiscoveryResult URL, form, endpoint, parameter, and provenance data.
 - Deduplicated targets by exact method plus normalized URL, preserving GET query values and first-seen order while merging parameter names and provenance.

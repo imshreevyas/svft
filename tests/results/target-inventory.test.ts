@@ -1,7 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { createEndpointInventory } from '../../src/discovery/index.js';
 import { createSecurityTargetInventory } from '../../src/results/index.js';
-import type { DiscoveryResult } from '../../src/types/index.js';
+import type {
+  DiscoveredForm,
+  DiscoveredUrl,
+  DiscoveryResult,
+} from '../../src/types/index.js';
 
 function discovery(overrides: Partial<DiscoveryResult> = {}): DiscoveryResult {
   return {
@@ -19,6 +24,81 @@ function discovery(overrides: Partial<DiscoveryResult> = {}): DiscoveryResult {
 }
 
 describe('security target inventory', () => {
+  it('preserves concrete targets when endpoint shapes aggregate query values', () => {
+    const discoveredUrls: DiscoveredUrl[] = [
+      {
+        url: 'https://example.com/api/search?q=cat',
+        depth: 1,
+        discoveredFrom: 'https://example.com/first',
+        source: 'url',
+      },
+      {
+        url: 'https://example.com/api/search?q=dog',
+        depth: 2,
+        discoveredFrom: 'https://example.com/app.js',
+        source: 'javascript',
+      },
+      {
+        url: 'https://example.com/api/search?q=cat',
+        depth: 3,
+        discoveredFrom: 'https://example.com/repeated',
+        source: 'url',
+      },
+    ];
+    const forms: DiscoveredForm[] = [
+      {
+        action: 'https://example.com/api/search?q=cat',
+        method: 'POST',
+        fields: [{ name: 'page', type: 'input', attributes: {} }],
+        provenance: [
+          {
+            source: 'form',
+            discoveredFrom: 'https://example.com/form',
+            depth: 1,
+          },
+        ],
+      },
+    ];
+    const endpoints = createEndpointInventory(discoveredUrls, forms);
+
+    expect(
+      endpoints.filter((endpoint) => endpoint.method === 'GET'),
+    ).toHaveLength(1);
+
+    const result = createSecurityTargetInventory(
+      discovery({ discoveredUrls, forms, endpoints }),
+    );
+
+    expect(result.map(({ method, url }) => `${method} ${url}`)).toEqual([
+      'GET https://example.com/api/search?q=cat',
+      'GET https://example.com/api/search?q=dog',
+      'POST https://example.com/api/search?q=cat',
+    ]);
+    expect(result[0]?.parameterNames).toEqual(['q']);
+    expect(result[1]?.parameterNames).toEqual(['q']);
+    expect(result[2]?.parameterNames).toEqual(['q', 'page']);
+    expect(result[0]?.provenance).toEqual([
+      {
+        source: 'url',
+        discoveredFrom: 'https://example.com/first',
+        depth: 1,
+      },
+      {
+        source: 'url',
+        discoveredFrom: 'https://example.com/repeated',
+        depth: 3,
+      },
+    ]);
+    expect(result[1]?.provenance).toEqual([
+      {
+        source: 'javascript',
+        discoveredFrom: 'https://example.com/app.js',
+        depth: 2,
+      },
+    ]);
+    expect(result[2]?.provenance).toEqual(forms[0]?.provenance);
+  });
+
   it('creates ordered URL and sitemap targets with concrete query values', () => {
     const result = createSecurityTargetInventory(
       discovery({
@@ -118,7 +198,39 @@ describe('security target inventory', () => {
     ]);
     expect(result[0]?.parameterNames).toEqual(['flow', 'username']);
     expect(result[1]?.parameterNames).toEqual(['flow', 'password']);
+    expect(result[0]?.provenance).toEqual([]);
+    expect(result[1]?.provenance).toEqual([]);
     expect(JSON.stringify(result)).not.toContain('login-password');
+  });
+
+  it('retains exact existing form provenance without inventing provenance', () => {
+    const forms: DiscoveredForm[] = [
+      {
+        action: 'https://example.com/submit',
+        method: 'POST',
+        fields: [],
+      },
+    ];
+    const endpoints = createEndpointInventory([], forms, [
+      {
+        depth: 2,
+        discoveredFrom: 'https://example.com/form-page',
+      },
+    ]);
+
+    expect(
+      createSecurityTargetInventory(discovery({ forms, endpoints }))[0]
+        ?.provenance,
+    ).toEqual([
+      {
+        source: 'form',
+        discoveredFrom: 'https://example.com/form-page',
+        depth: 2,
+      },
+    ]);
+    expect(
+      createSecurityTargetInventory(discovery({ forms }))[0]?.provenance,
+    ).toEqual([]);
   });
 
   it('deduplicates exact method and URL while merging names and provenance', () => {
@@ -149,31 +261,11 @@ describe('security target inventory', () => {
             ],
           },
         ],
-        endpoints: [
-          {
-            url: 'https://example.com/search?q=cat',
-            method: 'GET',
-            parameters: [
-              { name: 'q', source: 'query' },
-              { name: 'page', source: 'form' },
-            ],
-            depth: 1,
-            discoveredFrom: 'https://example.com/first',
-            source: 'url',
-            provenance: [
-              {
-                source: 'form',
-                discoveredFrom: 'https://example.com/second',
-                depth: 2,
-              },
-            ],
-          },
-        ],
       }),
     );
 
     expect(result).toHaveLength(1);
-    expect(result[0]?.parameterNames).toEqual(['q', 'term', 'page']);
+    expect(result[0]?.parameterNames).toEqual(['q', 'term']);
     expect(result[0]?.provenance).toEqual([
       {
         source: 'url',
@@ -184,6 +276,37 @@ describe('security target inventory', () => {
         source: 'form',
         discoveredFrom: 'https://example.com/second',
         depth: 2,
+      },
+    ]);
+  });
+
+  it('preserves JavaScript source and script-file provenance', () => {
+    const result = createSecurityTargetInventory(
+      discovery({
+        discoveredUrls: [
+          {
+            url: 'https://example.com/api/users?active=true',
+            depth: 1,
+            discoveredFrom: 'https://example.com/assets/app.js',
+            source: 'javascript',
+          },
+        ],
+      }),
+    );
+
+    expect(result).toEqual([
+      {
+        url: 'https://example.com/api/users?active=true',
+        method: 'GET',
+        source: 'javascript',
+        parameterNames: ['active'],
+        provenance: [
+          {
+            source: 'javascript',
+            discoveredFrom: 'https://example.com/assets/app.js',
+            depth: 1,
+          },
+        ],
       },
     ]);
   });

@@ -19,17 +19,17 @@ SVFT is an open-source, CLI-first web VAPT scanner written in TypeScript. Its cu
 
 ## Current Capability
 
-| Capability                   | Status          | Notes                                                |
-| ---------------------------- | --------------- | ---------------------------------------------------- |
-| HTTP(S) target validation    | Ready           | Explicit protocol required                           |
-| Dynamic scan configuration   | Ready           | Validated defaults and CLI overrides                 |
-| Centralized HTTP Engine      | Ready           | Timeout, retry, redirects, TLS, headers              |
-| URL discovery                | Ready           | HTML anchors/forms, same origin, FIFO, bounded depth |
-| Static asset filtering       | Ready           | Common non-document extensions skipped               |
-| Compact scan status          | Ready           | Dynamic counters without URL or transport spam       |
-| Canonical JSON results       | Ready           | Automatically written after successful scans         |
-| Browser/JavaScript discovery | Not implemented | No browser automation                                |
-| VAPT rules                   | Not implemented | No payloads or vulnerability tests                   |
+| Capability                   | Status          | Notes                                               |
+| ---------------------------- | --------------- | --------------------------------------------------- |
+| HTTP(S) target validation    | Ready           | Explicit protocol required                          |
+| Dynamic scan configuration   | Ready           | Validated defaults and CLI overrides                |
+| Centralized HTTP Engine      | Ready           | Timeout, retry, redirects, TLS, headers             |
+| URL discovery                | Ready           | HTML, passive JS text, forms, sitemaps, same origin |
+| Static asset filtering       | Ready           | Common non-document extensions skipped              |
+| Compact scan status          | Ready           | Dynamic counters without URL or transport spam      |
+| Canonical JSON results       | Ready           | Automatically written after successful scans        |
+| Browser/JavaScript execution | Not implemented | No browser automation or JavaScript execution       |
+| VAPT rules                   | Not implemented | No payloads or vulnerability tests                  |
 
 ## Requirements
 
@@ -120,10 +120,12 @@ Custom headers exist in the internal configuration model but are not exposed as 
 - Includes a deduplicated endpoint inventory with query/form parameter names and provenance; values are never stored.
 - Adds deterministic request/response fingerprints for fetched endpoint evidence and removes same-page duplicate forms.
 - Passively reads same-origin robots.txt Sitemap directives and bounded sitemap XML URLs/indexes; sitemap files are never treated as endpoints.
-- Discovered URLs retain `url` or `sitemap` source provenance; sitemap processing is capped at 32 documents and 1,000 URL entries per scan.
+- URLs, forms, endpoints, and security targets share ordered provenance with the concrete producing URL, discovery depth, and actual `url`, `sitemap`, `javascript`, or `form` mechanism; sitemap processing is capped at 32 documents and 1,000 URL entries per scan.
+- JavaScript URL extraction rejects obvious encoded markup and code fragments while preserving valid numeric, API, authentication, nested, query, and same-origin absolute routes.
+- Framework/runtime-internal module paths are filtered structurally; application routes remain eligible.
 - Endpoint identity uses method, path, and query-name shape; duplicate forms are collapsed canonically while cross-page provenance is retained.
 - Derives a passive security target inventory in ScanResult from existing discovery data. Target identity is exact method plus normalized URL; duplicate targets merge parameter names and provenance in first-seen order.
-- Scan flow: Target -> ScanConfig -> ScanContext -> HTTP Engine -> URL/Form discovery -> Endpoint/Parameter inventory -> fingerprints -> DiscoveryResult -> Security Target Inventory -> ScanResult -> JSON.
+- Scan flow: Target -> ScanConfig -> ScanContext -> HTTP Engine -> HTML/JS/Sitemap/Form discovery -> Endpoint/Parameter inventory -> fingerprints -> DiscoveryResult -> Security Target Inventory -> ScanResult -> JSON.
 - Resolves absolute, root-relative, relative, and query-only URLs against the final response URL.
 - Removes fragments, normalizes with the shared target parser, and preserves meaningful queries.
 - Stays on the seed origin (scheme, host, and effective port must match).

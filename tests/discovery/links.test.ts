@@ -49,6 +49,18 @@ describe('discovery link helpers', () => {
         depth: 1,
         discoveredFrom: 'https://example.com/',
         source: 'url',
+        provenance: [
+          {
+            source: 'url',
+            discoveredFrom: 'https://example.com/',
+            depth: 1,
+          },
+          {
+            source: 'form',
+            discoveredFrom: 'https://example.com/form',
+            depth: 2,
+          },
+        ],
       },
     ]);
   });
