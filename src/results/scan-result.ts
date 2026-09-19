@@ -18,7 +18,9 @@ export function createScanResult(
     duration: Math.max(0, completedAt.getTime() - context.startedAt.getTime()),
     configuration: {
       ...context.config,
-      headers: { ...context.config.headers },
+      // Request headers may contain credentials or session material. They are
+      // used by the HTTP engine but are deliberately not persisted.
+      headers: {},
     },
     discovery,
     targetInventory: createSecurityTargetInventory(discovery),

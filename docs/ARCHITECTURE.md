@@ -53,7 +53,7 @@ The dependency direction is important: discovery may call HTTP, but HTTP does no
 
 `createHttpClient(config)` uses Node.js `node:http` and `node:https`; no networking dependency is installed. It supports typed requests and responses, lowercase multi-value response headers, response bodies, monotonic timing, and redirect history.
 
-Header precedence is configuration headers, configured User-Agent, then per-request headers. TLS verification is request-local and enabled by default. Redirect following covers 301, 302, 303, 307, and 308 with a configured hop limit. Discovery supplies a redirect predicate so a cross-origin redirect response is returned without sending a request to the foreign origin.
+Header precedence is configuration headers, configured User-Agent, then per-request headers. TLS verification is request-local and enabled by default. Redirect following covers 301, 302, 303, 307, and 308 with a configured hop limit. Discovery supplies a redirect predicate so a cross-origin redirect response is returned without sending a request to the foreign origin. URL userinfo is removed before URLs enter persisted target/discovery data.
 
 Retries apply only to safe methods for timeouts and recognized transient transport failures. HTTP statuses, TLS errors, permanent DNS errors, aborts, invalid requests, unsupported protocols, and redirect-limit failures are not automatically retried.
 
@@ -103,7 +103,7 @@ No percentage is shown because discovery cannot know its final URL count in adva
 
 `SecurityTarget` is the passive, test-ready identity derived from existing DiscoveryResult data: normalized URL, GET/POST method, first-seen source, ordered parameter names, and ordered provenance. Its identity is exact method plus normalized URL, so GET and POST remain separate and concrete GET query values are preserved. Duplicate identities merge parameter names and provenance while retaining deterministic first-seen order. Derivation performs no requests, form submissions, payload generation, or vulnerability inference.
 
-`ScanResult` is the canonical serializable scan record. It contains the ScanContext ID, normalized target, ISO start/completion times, duration in milliseconds, resolved configuration, DiscoveryResult, and the derived `targetInventory`. It deliberately has no findings field because vulnerability testing does not exist.
+`ScanResult` is the canonical serializable scan record. It contains the ScanContext ID, normalized target, ISO start/completion times, duration in milliseconds, resolved configuration, DiscoveryResult, and the derived `targetInventory`. Configured request headers are omitted from persisted configuration, and form fields retain only non-value metadata. It deliberately has no findings field because vulnerability testing does not exist.
 
 ## Result persistence
 

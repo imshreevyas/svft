@@ -153,6 +153,19 @@ describe('discovery link helpers', () => {
     ]);
   });
 
+  it('does not persist arbitrary field attribute values', () => {
+    const forms = extractForms(
+      '<form action="/submit"><input name="csrf" type="hidden" value="secret" data-token="session-secret" required></form>',
+      new URL('https://example.com/'),
+      'https://example.com',
+    );
+
+    expect(forms[0]?.fields).toEqual([
+      { name: 'csrf', type: 'input', attributes: { type: 'hidden', required: true } },
+    ]);
+    expect(JSON.stringify(forms)).not.toContain('session-secret');
+  });
+
   it('ignores unsupported and external form actions', () => {
     const base = new URL('https://example.com/');
     expect(

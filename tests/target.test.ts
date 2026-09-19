@@ -22,4 +22,12 @@ describe('createTarget', () => {
 
     expect(target.normalizedUrl).toBe('https://example.com/docs');
   });
+
+  it('removes URL userinfo before it can enter discovery or results', () => {
+    const target = createTarget('https://user:password@example.com/path');
+
+    expect(target.normalizedUrl).toBe('https://example.com/path');
+    expect(target.url.username).toBe('');
+    expect(target.url.password).toBe('');
+  });
 });

@@ -52,4 +52,19 @@ describe('fingerprints', () => {
       fingerprintResponse(response({ accept: ['text/html'] }, 'body')),
     );
   });
+
+  it('does not let URL userinfo or sensitive headers affect request fingerprints', () => {
+    expect(
+      fingerprintRequest(
+        request({ Authorization: 'Bearer one', Accept: 'text/html' }),
+      ),
+    ).toBe(
+      fingerprintRequest(
+        {
+          ...request({ Authorization: 'Bearer two', Accept: 'text/html' }),
+          url: new URL('https://user:password@example.com/path#other'),
+        },
+      ),
+    );
+  });
 });

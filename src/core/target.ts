@@ -34,6 +34,10 @@ export function createTarget(inputUrl: string): Target {
     throw new InvalidTargetError('Target URL must include a hostname.');
   }
 
+  // Credentials are transport input, never part of a persisted target or
+  // discovery URL. Authentication is intentionally not supported.
+  url.username = '';
+  url.password = '';
   url.hash = '';
 
   return {

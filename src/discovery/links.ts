@@ -22,6 +22,21 @@ function parseAttributes(source: string): ParsedAttributes {
   return attributes;
 }
 
+function persistedFieldAttributes(
+  attributes: ParsedAttributes,
+): Record<string, string | true> {
+  const safe: Record<string, string | true> = {};
+  for (const [name, value] of Object.entries(attributes)) {
+    // Boolean field metadata is useful for discovery. The only string
+    // metadata retained is the control type; arbitrary attribute values can
+    // contain tokens, state, or other secrets.
+    if (value === true || name === 'type') {
+      safe[name] = value;
+    }
+  }
+  return safe;
+}
+
 export function extractForms(
   html: string,
   baseUrl: URL,
@@ -51,12 +66,13 @@ export function extractForms(
       if (type === undefined) continue;
       const parsed = parseAttributes(fieldMatch[2] ?? '');
       const name = typeof parsed.name === 'string' ? parsed.name : null;
-      const attributes: Record<string, string | true> = { ...parsed };
-      delete attributes.name;
+      const fieldAttributes = Object.fromEntries(
+        Object.entries(parsed).filter(([attribute]) => attribute !== 'name'),
+      );
       fields.push({
         name,
         type,
-        attributes,
+        attributes: persistedFieldAttributes(fieldAttributes),
       });
     }
     forms.push({ action: action.href, method: methodValue, fields });

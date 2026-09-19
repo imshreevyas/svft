@@ -1,6 +1,14 @@
 svft change log
 All timestamps use Asia/Calcutta (UTC+05:30).
 
+[2026-09-19 13:50:00 +05:30] Hardened Discovery result persistence
+- Removed URL userinfo and configured request headers from persisted scan data.
+- Restricted passive form field metadata to names, types, and boolean attributes;
+  arbitrary attribute values are no longer retained.
+- Kept response headers, bodies, redirect chains, and sensitive header inputs out
+  of persisted discovery evidence, with regression coverage for fingerprints and
+  result construction.
+
 [2026-09-19 13:38:50 +05:30] Unified Discovery provenance semantics
 - Reused the shared DiscoveryProvenance representation across discovered URLs, forms, endpoints, and SecurityTargets, with concrete producing URLs, discovery-time depths, and actual mechanisms.
 - Merged multiple real discovery paths deterministically in first-seen order and stopped fabricating a null-parent provenance entry for the seed.

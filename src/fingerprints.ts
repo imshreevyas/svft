@@ -28,7 +28,7 @@ function normalizedHeaders(
   for (const [name, value] of Object.entries(headers)) {
     const normalizedName = name.toLowerCase();
     if (
-      /(?:authorization|cookie|token|password|secret|api[-_]?key)/iu.test(
+      /(?:authorization|cookie|credential|password|secret|session|token|api[-_]?key)/iu.test(
         normalizedName,
       )
     ) {
@@ -43,6 +43,8 @@ function normalizedHeaders(
 export function fingerprintRequest(request: HttpRequest): string {
   const url = new URL(request.url.href);
   url.hash = '';
+  url.username = '';
+  url.password = '';
   return digest({
     method: request.method.toUpperCase(),
     url: url.href,

@@ -409,6 +409,10 @@ function redirectedMethod(method: HttpMethod, statusCode: number): HttpMethod {
   return method;
 }
 
+function redactUrlUserinfo(value: string): string {
+  return value.replace(/(https?:\/\/)[^/\s@]+:[^/\s@]+@/giu, '$1');
+}
+
 function redirectUrl(location: string, currentUrl: URL): URL {
   let nextUrl: URL;
 
@@ -417,7 +421,7 @@ function redirectUrl(location: string, currentUrl: URL): URL {
   } catch (cause: unknown) {
     throw new HttpError(
       'INVALID_REQUEST',
-      `Invalid redirect location from ${currentUrl.href}: ${location}`,
+      `Invalid redirect location from ${currentUrl.href}: ${redactUrlUserinfo(location)}`,
       currentUrl.href,
       cause,
     );
@@ -431,6 +435,8 @@ function redirectUrl(location: string, currentUrl: URL): URL {
     );
   }
 
+  nextUrl.username = '';
+  nextUrl.password = '';
   return nextUrl;
 }
 
@@ -439,10 +445,13 @@ export function createHttpClient(config: ScanConfig): HttpClient {
     request: async (request): Promise<HttpResponse> => {
       validateRequest(request);
 
-      const requestedUrl = request.url.href;
+      const initialUrl = new URL(request.url);
+      initialUrl.username = '';
+      initialUrl.password = '';
+      const requestedUrl = initialUrl.href;
       const startedAt = performance.now();
       const redirectChain: HttpRedirect[] = [];
-      let currentUrl = new URL(request.url);
+      let currentUrl = initialUrl;
       let method = request.method;
 
       for (;;) {
