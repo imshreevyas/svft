@@ -210,7 +210,11 @@ export async function discoverUrls(
           }
           continue;
         }
-        if (config.crawlDepth < 1 || sitemapUrlCount >= MAX_SITEMAP_URLS)
+        if (
+          config.crawlDepth < 1 ||
+          sitemapUrlCount >= MAX_SITEMAP_URLS ||
+          !isDocumentUrl(normalized)
+        )
           continue;
         if (knownUrls.has(normalized.href)) {
           const existingIndex = discoveredUrlIndex.get(normalized.href);

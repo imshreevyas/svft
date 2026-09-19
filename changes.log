@@ -9,6 +9,12 @@ All timestamps use Asia/Calcutta (UTC+05:30).
   of persisted discovery evidence, with regression coverage for fingerprints and
   result construction.
 
+[2026-09-19 14:17:00 +05:30] Applied static-resource filtering to sitemap URLs
+- Kept sitemap URL-set entries consistent with HTML discovery by excluding
+  common static-resource extensions before queueing or requesting them.
+- Preserved sitemap index processing, concrete query values, FIFO ordering, and
+  sitemap provenance for accepted URLs.
+
 [2026-09-19 14:05:00 +05:30] Canonicalized redirected request fingerprints
 - Kept request fingerprints tied to the original requested method and URL when
   transport follows redirects, matching the canonical discovery endpoint record.

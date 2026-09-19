@@ -161,7 +161,7 @@ describe('URL discovery crawler', () => {
         } else if (request.url === '/maps/pages.xml') {
           response.setHeader('content-type', 'application/xml');
           response.end(
-            '<urlset><url><loc>/from-sitemap?x=1#frag</loc></url><url><loc>/</loc></url></urlset>',
+            '<urlset><url><loc>/from-sitemap?x=1#frag</loc></url><url><loc>/image.JPG</loc></url><url><loc>/</loc></url></urlset>',
           );
         } else {
           html(response, '<html></html>');
@@ -175,6 +175,7 @@ describe('URL discovery crawler', () => {
     expect(requests).toContain('/maps/index.xml');
     expect(requests).toContain('/maps/pages.xml');
     expect(requests).toContain('/from-sitemap?x=1');
+    expect(requests).not.toContain('/image.JPG');
     expect(result.discoveredUrls).toContainEqual({
       url: `${server.origin}/from-sitemap?x=1`,
       depth: 1,
