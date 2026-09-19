@@ -6,7 +6,7 @@ import {
   createTarget,
   InvalidTargetError,
 } from '../core/index.js';
-import { discoverUrls } from '../discovery/index.js';
+import { discoverUrls } from '../discovery/crawler.js';
 import { HttpError } from '../http/index.js';
 import {
   createScanResult,

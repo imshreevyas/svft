@@ -1,18 +1,13 @@
-export { discoverUrls, type DiscoveryOptions } from './crawler.js';
-export {
-  extractAnchorHrefs,
-  extractForms,
-  isDocumentUrl,
-  isSameOrigin,
-  normalizeDiscoveredUrl,
-} from './links.js';
-export { createEndpointInventory } from './endpoints.js';
-export {
-  extractJavaScriptReferences,
-  extractScriptSources,
-  isJavaScriptTextResponse,
-} from './javascript.js';
-export {
-  extractSitemapLocations,
-  extractSitemapReferences,
-} from './sitemap.js';
+export { discover, type DiscoverOptions } from './public.js';
+export type {
+  DiscoveredEndpoint,
+  DiscoveredForm,
+  DiscoveredFormField,
+  DiscoveredParameter,
+  DiscoveredUrl,
+  DiscoveryConfiguration,
+  DiscoveryFailure,
+  DiscoveryOutputV1,
+  DiscoveryProvenance,
+  DiscoveryStatistics,
+} from '../types/index.js';

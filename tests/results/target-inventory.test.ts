@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createEndpointInventory } from '../../src/discovery/index.js';
+import { createEndpointInventory } from '../../src/discovery/endpoints.js';
 import { createSecurityTargetInventory } from '../../src/results/index.js';
 import type {
   DiscoveredForm,

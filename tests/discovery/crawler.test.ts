@@ -3,7 +3,7 @@ import { performance } from 'node:perf_hooks';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createScanConfig, createTarget } from '../../src/core/index.js';
-import { discoverUrls } from '../../src/discovery/index.js';
+import { discoverUrls } from '../../src/discovery/crawler.js';
 import { createSecurityTargetInventory } from '../../src/results/index.js';
 import type {
   DiscoveryEvent,

@@ -56,7 +56,7 @@ function formIdentity(form: DiscoveredForm): string {
   });
 }
 
-export interface DiscoveryOptions {
+interface InternalDiscoveryOptions {
   readonly client?: HttpClient;
   readonly onEvent?: DiscoveryEventHandler;
   readonly signal?: AbortSignal;
@@ -123,7 +123,7 @@ function createSeed(target: Target): DiscoveredUrl {
 export async function discoverUrls(
   target: Target,
   config: ScanConfig,
-  options: DiscoveryOptions = {},
+  options: InternalDiscoveryOptions = {},
 ): Promise<DiscoveryResult> {
   const client = options.client ?? createHttpClient(config);
   const seed = createSeed(target);

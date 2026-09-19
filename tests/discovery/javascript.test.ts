@@ -4,7 +4,7 @@ import {
   extractJavaScriptReferences,
   extractScriptSources,
   isJavaScriptTextResponse,
-} from '../../src/discovery/index.js';
+} from '../../src/discovery/javascript.js';
 
 describe('passive JavaScript extraction', () => {
   it('extracts script sources in source order', () => {

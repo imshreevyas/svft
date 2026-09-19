@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
+import { createEndpointInventory } from '../../src/discovery/endpoints.js';
 import {
-  createEndpointInventory,
   extractAnchorHrefs,
   extractForms,
   isDocumentUrl,
   isSameOrigin,
   normalizeDiscoveredUrl,
-} from '../../src/discovery/index.js';
+} from '../../src/discovery/links.js';
 import type { DiscoveredForm, DiscoveredUrl } from '../../src/types/index.js';
 
 describe('discovery link helpers', () => {

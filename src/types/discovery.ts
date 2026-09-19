@@ -1,4 +1,5 @@
 import type { HttpErrorCode } from '../http/errors.js';
+import type { ScanConfig } from './config.js';
 
 export interface DiscoveredUrl {
   readonly url: string;
@@ -60,6 +61,28 @@ export interface DiscoveryResult {
   readonly failedUrls: readonly DiscoveryFailure[];
   readonly forms?: readonly DiscoveredForm[];
   readonly endpoints?: readonly DiscoveredEndpoint[];
+}
+
+export type DiscoveryConfiguration = Omit<ScanConfig, 'headers'>;
+
+export interface DiscoveryStatistics {
+  readonly requestedCount: number;
+  readonly discoveredUrlCount: number;
+  readonly formCount: number;
+  readonly endpointCount: number;
+  readonly failureCount: number;
+}
+
+export interface DiscoveryOutputV1 {
+  readonly schemaVersion: 'svft.discovery/v1';
+  readonly target: string;
+  readonly configuration: DiscoveryConfiguration;
+  readonly seed: DiscoveredUrl;
+  readonly discoveredUrls: readonly DiscoveredUrl[];
+  readonly forms: readonly DiscoveredForm[];
+  readonly endpoints: readonly DiscoveredEndpoint[];
+  readonly failures: readonly DiscoveryFailure[];
+  readonly statistics: DiscoveryStatistics;
 }
 
 interface DiscoveryProgress {
