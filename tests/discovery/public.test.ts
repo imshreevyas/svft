@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { describe, expect, it } from 'vitest';
 
 import { discover } from '../../src/discovery/index.js';
@@ -40,6 +42,29 @@ function clientFor(
 }
 
 describe('public discovery API', () => {
+  it('publishes the svft-discovery package identity and preserved CLI boundary', async () => {
+    const packageJson = JSON.parse(
+      await readFile(new URL('../../package.json', import.meta.url), 'utf8'),
+    ) as {
+      name?: unknown;
+      bin?: unknown;
+      exports?: unknown;
+    };
+
+    expect(packageJson.name).toBe('svft-discovery');
+    expect(packageJson.bin).toEqual({ svft: './dist/cli/index.js' });
+    expect(packageJson.exports).toEqual({
+      '.': {
+        types: './dist/index.d.ts',
+        import: './dist/index.js',
+      },
+      './discovery': {
+        types: './dist/discovery/index.d.ts',
+        import: './dist/discovery/index.js',
+      },
+    });
+  });
+
   it('normalizes string and URL targets, configuration, output, and statistics', async () => {
     const signals: (AbortSignal | undefined)[] = [];
     const events: string[] = [];

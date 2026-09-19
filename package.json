@@ -1,7 +1,7 @@
 {
-  "name": "svft",
+  "name": "svft-discovery",
   "version": "0.1.0",
-  "description": "A simple, CLI-first web VAPT scanner",
+  "description": "Safe, bounded same-origin web discovery for security workflows",
   "type": "module",
   "exports": {
     ".": {
@@ -34,9 +34,11 @@
   },
   "keywords": [
     "security",
-    "vapt",
-    "scanner",
-    "cli"
+    "web-discovery",
+    "url-discovery",
+    "reconnaissance",
+    "cli",
+    "typescript"
   ],
   "license": "MIT",
   "dependencies": {

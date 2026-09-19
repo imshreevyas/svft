@@ -1,6 +1,17 @@
 svft change log
 All timestamps use Asia/Calcutta (UTC+05:30).
 
+[2026-09-19 23:00:00 +05:30] Extracted standalone svft-discovery project identity
+- Renamed the package identity to `svft-discovery` while preserving the `svft`
+  CLI command, existing Discovery implementation, and the `svft.discovery/v1`
+  contract.
+- Reworked the README and project documentation around the standalone discovery
+  ownership boundary, public API, schema contract, safety guarantees, and
+  contributor workflow.
+- Removed obsolete documentation references to a reserved rules component and
+  added focused contribution guidance. No discovery, HTTP, schema, CLI, or test
+  behavior changed.
+
 [2026-09-19 22:30:00 +05:30] Froze the standalone Discovery v1 contract
 - Added the package root and discovery subpath exports for `discover()` and the
   approved Discovery domain types only; crawler and extraction modules remain

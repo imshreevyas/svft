@@ -2,7 +2,7 @@
 
 ## Principles
 
-SVFT is one strict-TypeScript ESM package with a CLI entry point. It favors small functions, plain immutable models, direct dependencies, and explicit data flow. It has no database, UI, Docker layer, monorepo, browser automation, or plugin system.
+svft-discovery is one strict-TypeScript ESM package with the preserved `svft` CLI entry point. It favors small functions, plain immutable models, direct dependencies, and explicit data flow. It owns standalone discovery only; it has no database, UI, Docker layer, monorepo, browser automation, or plugin system.
 
 All network traffic goes through the centralized HTTP Engine. Discovery owns URL selection and scheduling; HTTP owns transport behavior. Result persistence is separate from both. None of these layers owns vulnerability logic.
 
@@ -44,7 +44,6 @@ CLI -> Target -> ScanConfig -> ScanContext -> HTTP Engine
 - `src/discovery/`: HTML anchor/script/form extraction, passive JavaScript text reference extraction, URL resolution/filtering/deduplication, FIFO traversal, endpoint/parameter inventory, and discovery results.
 - `src/fingerprints.ts`: canonical SHA-256 request/response fingerprints with sensitive-header exclusion.
 - `src/results/`: passive security target derivation, canonical ScanResult construction, and exclusive UTF-8 JSON persistence.
-- `src/rules/`: reserved for future VAPT rules; currently empty.
 - `src/types/`: shared domain types.
 
 The dependency direction is important: discovery may call HTTP, but HTTP does not import discovery. The CLI does not implement URL or transport policy itself.
@@ -121,6 +120,8 @@ Discovery and HTTP do not import the writer and perform no filesystem operations
 
 Transport, discovery, and CLI integration tests use ephemeral loopback servers. Discovery coverage includes depth boundaries, URL/forms/scripts, normalization, query preservation, fragments, origin/port rules, static filtering, HTML/JavaScript media detection, redirects, deduplication, FIFO continuation, delay, failures, passive form extraction, and passive JavaScript reference extraction. Target-inventory tests cover URL, form, sitemap, JavaScript, method/path identity, query preservation, metadata/provenance merging, deterministic order, and zero network traffic. HTTPS tests use repository fixtures and never alter global TLS settings.
 
-## Deferred work
+## Ownership boundary
 
-Vulnerability rules, payloads, form submission, JavaScript execution, browser automation, technology detection, authentication, API discovery, HTML/SARIF reports, databases, and plugins remain out of scope. JSON is the only canonical result format.
+The published package boundary is `svft-discovery` and `svft-discovery/discovery`, each exposing only `discover()` and the approved Discovery types. The stable output contract is `svft.discovery/v1`; CLI compatibility remains the `svft` command. Extraction helpers, crawler internals, target/configuration models, transport details, and scan-result derivations are intentionally internal.
+
+Vulnerability rules, payloads, form submission, JavaScript execution, browser automation, technology detection, authentication, API discovery, HTML/SARIF reports, databases, dashboards, and plugins are outside this repository's scope. JSON is the only canonical result format.

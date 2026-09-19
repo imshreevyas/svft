@@ -1,10 +1,11 @@
 # Project Context
 
-Last updated: 2026-09-19 22:30:00 +05:30
+Last updated: 2026-09-19 23:00:00 +05:30
 
 ## Identity and intent
 
-- Name: `svft` (Security Vulnerability Finding Tool)
+- Package name: `svft-discovery`
+- CLI command: `svft` (preserved for compatibility)
 - Version: `0.1.0`
 - License: MIT
 - Runtime: Node.js 22+
@@ -12,7 +13,7 @@ Last updated: 2026-09-19 22:30:00 +05:30
 - Language: strict TypeScript, ESM
 - Interface: Commander-based CLI
 
-SVFT is an open-source, maintainable web VAPT scanner. The project grows in small, testable stages. Its current boundary is configuration-driven, same-origin URL discovery with live progress and canonical JSON persistence; it does not claim to find vulnerabilities yet.
+svft-discovery is an open-source, standalone web-discovery package. Its ownership boundary is configuration-driven, same-origin URL discovery, passive endpoint metadata, the supporting HTTP transport, and CLI JSON persistence. It does not own vulnerability scanning or broader security-platform components.
 
 ## Current position
 
@@ -62,7 +63,6 @@ src/
   discovery/    link extraction and FIFO coordinator
   http/         centralized transport engine
   results/      ScanResult construction and JSON writer
-  rules/        reserved; no rules implemented
   scanner/      ScanContext creation
   types/        shared domain models
 tests/
@@ -127,7 +127,7 @@ It also contains an endpoint inventory. `DiscoveredEndpoint` unifies URL links, 
 
 ### Frozen public Discovery API
 
-The package public API is the root `svft` export and the equivalent `svft/discovery` subpath. Both expose only `discover()` and the approved Discovery domain types; extraction helpers, `discoverUrls()`, crawler options, `Target`, `ScanContext`, `SecurityTarget`, and transport response models are not public API.
+The package public API is the root `svft-discovery` export and the equivalent `svft-discovery/discovery` subpath. Both expose only `discover()` and the approved Discovery domain types; extraction helpers, `discoverUrls()`, crawler options, `Target`, `ScanContext`, `SecurityTarget`, and transport response models are not public API. The CLI remains `svft`.
 
 ```ts
 discover(target: string | URL, options?: DiscoverOptions): Promise<DiscoveryOutputV1>
@@ -217,7 +217,7 @@ pnpm format:check
 pnpm test
 ```
 
-To make `svft` available globally from this checkout:
+To make the preserved `svft` command available globally from this checkout:
 
 ```sh
 pnpm build
@@ -238,7 +238,7 @@ Tests use ephemeral loopback servers and no public internet. HTTPS uses reposito
 - Keep one package, strict TypeScript, and ESM.
 - Keep target parsing in `createTarget()` and configuration in `createScanConfig()`.
 - Route all traffic through `createHttpClient()`.
-- Keep transport policy out of CLI, discovery, and future rules.
+- Keep transport policy out of CLI and discovery.
 - Keep discovery sequential until concurrency has a concrete design and deterministic tests.
 - Keep discovery limited to URL collection; do not mix in vulnerability behavior.
 - Keep progress events in discovery but all terminal presentation in the CLI.
@@ -248,12 +248,12 @@ Tests use ephemeral loopback servers and no public internet. HTTPS uses reposito
 - Add no large dependency without a demonstrated requirement.
 - Update this document and `changes.log` whenever behavior or boundaries change.
 
-## Security boundary and next stage
+## Security boundary and repository scope
 
 Users must have authorization for every target they scan. Even bounded discovery sends network requests to same-origin pages.
 
-The next planned stage is focused VAPT rules with reproducible evidence and remediation guidance. It must be scoped separately. Browser automation, technology detection, parameter testing, API discovery, and additional report formats remain later decisions rather than implied work.
+This repository remains limited to standalone discovery. Authentication, technology detection, CVE matching, rules, active testing, payloads, dashboards, browser automation, API detection, databases, plugins, and additional report formats are not planned implicitly and require a separately scoped project or decision.
 
 ## Handoff
 
-A contributor can clone, install, run checks, build, globally link the CLI, validate a target, watch compact discovery counters, and inspect detailed URLs/forms in the generated JSON record. Requests remain GET-only; forms are passive metadata only.
+A contributor can clone, install, run checks, build, globally link the `svft` CLI, validate a target, watch compact discovery counters, and inspect detailed URLs/forms in the generated JSON record. The npm/library identity is `svft-discovery`; requests remain GET-only and forms are passive metadata only.
