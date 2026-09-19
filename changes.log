@@ -9,6 +9,12 @@ All timestamps use Asia/Calcutta (UTC+05:30).
   of persisted discovery evidence, with regression coverage for fingerprints and
   result construction.
 
+[2026-09-19 14:05:00 +05:30] Canonicalized redirected request fingerprints
+- Kept request fingerprints tied to the original requested method and URL when
+  transport follows redirects, matching the canonical discovery endpoint record.
+- Added regression coverage for multi-hop redirects, concrete query values,
+  provenance, SecurityTarget identity, and removal of redirect URL userinfo.
+
 [2026-09-19 13:38:50 +05:30] Unified Discovery provenance semantics
 - Reused the shared DiscoveryProvenance representation across discovered URLs, forms, endpoints, and SecurityTargets, with concrete producing URLs, discovery-time depths, and actual mechanisms.
 - Merged multiple real discovery paths deterministically in first-seen order and stopped fabricating a null-parent provenance entry for the seed.

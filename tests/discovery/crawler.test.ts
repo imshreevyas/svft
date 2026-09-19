@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import { createScanConfig, createTarget } from '../../src/core/index.js';
 import { discoverUrls } from '../../src/discovery/index.js';
+import { createSecurityTargetInventory } from '../../src/results/index.js';
 import type {
   DiscoveryEvent,
   DiscoveryEventHandler,
@@ -774,6 +775,60 @@ describe('URL discovery crawler', () => {
         },
       ],
     });
+  });
+
+  it('keeps redirect aliases out of canonical records while preserving safe identity data', async () => {
+    const server = await track(
+      startHttpServer((request, response) => {
+        if (request.url === '/start?seed=7') {
+          const host = request.headers.host;
+          if (host === undefined) {
+            response.destroy(new Error('Missing Host header.'));
+            return;
+          }
+          response.writeHead(302, {
+            location: `http://user:secret@${host}/middle?item=42`,
+          });
+          response.end();
+        } else if (request.url === '/middle?item=42') {
+          response.writeHead(301, { location: '/final?item=42' });
+          response.end();
+        } else if (request.url === '/final?item=42') {
+          html(response, '<a href="child?item=42">Child</a>');
+        } else {
+          html(response, '<html></html>');
+        }
+      }),
+    );
+
+    const result = await discover(
+      `http://input:password@${new URL(server.origin).host}/start?seed=7`,
+    );
+    const inventory = createSecurityTargetInventory(result);
+    const serialized = JSON.stringify({ result, inventory });
+
+    expect(result.discoveredUrls.map((item) => item.url)).toEqual([
+      `${server.origin}/start?seed=7`,
+      `${server.origin}/child?item=42`,
+    ]);
+    expect(result.endpoints?.map((item) => item.url)).toEqual([
+      `${server.origin}/start?seed=7`,
+      `${server.origin}/child?item=42`,
+    ]);
+    expect(inventory.map((item) => item.url)).toEqual([
+      `${server.origin}/start?seed=7`,
+      `${server.origin}/child?item=42`,
+    ]);
+    expect(result.discoveredUrls[1]?.provenance).toEqual([
+      {
+        source: 'url',
+        discoveredFrom: `${server.origin}/final?item=42`,
+        depth: 1,
+      },
+    ]);
+    expect(result.endpoints?.[0]?.requestFingerprint).toMatch(/^[a-f0-9]{64}$/);
+    expect(serialized).not.toContain('secret');
+    expect(serialized).not.toContain('password');
   });
 
   it('accepts same-origin links and rejects cross-origin links', async () => {

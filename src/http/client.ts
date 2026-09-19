@@ -449,6 +449,11 @@ export function createHttpClient(config: ScanConfig): HttpClient {
       initialUrl.username = '';
       initialUrl.password = '';
       const requestedUrl = initialUrl.href;
+      const requestFingerprint = fingerprintRequest({
+        method: request.method,
+        url: initialUrl,
+        headers: normalizeRequestHeaders(config, request.headers, initialUrl),
+      });
       const startedAt = performance.now();
       const redirectChain: HttpRedirect[] = [];
       let currentUrl = initialUrl;
@@ -477,9 +482,7 @@ export function createHttpClient(config: ScanConfig): HttpClient {
           };
           return {
             ...finalResponse,
-            ...(response.requestFingerprint === undefined
-              ? {}
-              : { requestFingerprint: response.requestFingerprint }),
+            requestFingerprint,
             responseFingerprint: fingerprintResponse(finalResponse),
           };
         }
@@ -507,9 +510,7 @@ export function createHttpClient(config: ScanConfig): HttpClient {
           };
           return {
             ...finalResponse,
-            ...(response.requestFingerprint === undefined
-              ? {}
-              : { requestFingerprint: response.requestFingerprint }),
+            requestFingerprint,
             responseFingerprint: fingerprintResponse(finalResponse),
           };
         }

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { createScanConfig } from '../../src/core/index.js';
+import { fingerprintRequest } from '../../src/fingerprints.js';
 import {
   createHttpClient,
   HttpError,
@@ -274,6 +275,39 @@ describe('HTTP client', () => {
         statusCode: 308,
       },
     ]);
+  });
+
+  it('keeps the request fingerprint tied to the original requested URL', async () => {
+    const server = await track(
+      startHttpServer((request, response) => {
+        if (request.url === '/start') {
+          response.writeHead(302, { location: '/middle' });
+          response.end();
+          return;
+        }
+
+        response.end('done');
+      }),
+    );
+
+    const response = await get(`${server.origin}/start`);
+
+    expect(response.requestedUrl).toBe(`${server.origin}/start`);
+    expect(response.finalUrl).toBe(`${server.origin}/middle`);
+    expect(response.requestFingerprint).toBe(
+      fingerprintRequest({
+        method: 'GET',
+        url: new URL(`${server.origin}/start`),
+        headers: { 'user-agent': 'SVFT/0.1.0' },
+      }),
+    );
+    expect(response.requestFingerprint).not.toBe(
+      fingerprintRequest({
+        method: 'GET',
+        url: new URL(`${server.origin}/middle`),
+        headers: { 'user-agent': 'SVFT/0.1.0' },
+      }),
+    );
   });
 
   it('stops when the maximum redirect count is exceeded', async () => {
