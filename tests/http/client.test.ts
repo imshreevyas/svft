@@ -436,6 +436,33 @@ describe('HTTP client', () => {
     }
   });
 
+  it('aborts during retry delay without starting another attempt', async () => {
+    let attempts = 0;
+    const server = await track(
+      startHttpServer((request) => {
+        attempts += 1;
+        request.socket.destroy();
+      }),
+    );
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => {
+      controller.abort('test abort');
+    }, 20);
+
+    try {
+      await expect(
+        get(
+          server.origin,
+          { retries: 2, retryDelay: 1_000 },
+          { signal: controller.signal },
+        ),
+      ).rejects.toMatchObject({ code: 'ABORTED' });
+      expect(attempts).toBe(1);
+    } finally {
+      clearTimeout(abortTimer);
+    }
+  });
+
   it('uses the public HttpError model for request failures', async () => {
     try {
       await get('mailto:test@example.com');

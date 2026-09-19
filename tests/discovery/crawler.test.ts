@@ -162,6 +162,26 @@ describe('URL discovery crawler', () => {
     await expect(discovery).rejects.toMatchObject({ code: 'ABORTED' });
   });
 
+  it('aborts while waiting between passive and application requests', async () => {
+    const server = await track(
+      startHttpServer((_request, response) => {
+        response.end();
+      }),
+    );
+    const controller = new AbortController();
+    const discovery = discoverUrls(
+      createTarget(server.origin),
+      createScanConfig({ retries: 0, requestDelay: 1_000 }),
+      { signal: controller.signal },
+    );
+
+    setTimeout(() => {
+      controller.abort('test abort');
+    }, 20);
+
+    await expect(discovery).rejects.toMatchObject({ code: 'ABORTED' });
+  });
+
   it('requests only the seed at depth 0', async () => {
     const requests: string[] = [];
     const server = await track(
@@ -203,6 +223,8 @@ describe('URL discovery crawler', () => {
           response.end(
             '<urlset><url><loc>/from-sitemap?x=1#frag</loc></url><url><loc>/image.JPG</loc></url><url><loc>/</loc></url></urlset>',
           );
+        } else if (request.url === '/') {
+          html(response, '<a href="/from-sitemap?x=1">Duplicate</a>');
         } else {
           html(response, '<html></html>');
         }
@@ -225,6 +247,11 @@ describe('URL discovery crawler', () => {
         {
           source: 'sitemap',
           discoveredFrom: `${server.origin}/maps/pages.xml`,
+          depth: 1,
+        },
+        {
+          source: 'url',
+          discoveredFrom: `${server.origin}/`,
           depth: 1,
         },
       ],
@@ -1013,10 +1040,37 @@ describe('URL discovery crawler', () => {
     );
 
     const result = await discover(server.origin);
+    const inventory = createSecurityTargetInventory(result);
 
     expect(requests).toEqual(['/', '/failure', '/success']);
     expect(result.failedUrls).toHaveLength(1);
     expect(result.failedUrls[0]?.target.url).toBe(`${server.origin}/failure`);
+    expect(inventory.map((target) => target.url)).toContain(
+      `${server.origin}/failure`,
+    );
     expect(result.requestedCount).toBe(3);
+  });
+
+  it('does not create response evidence for an oversized child response', async () => {
+    const server = await track(
+      startHttpServer((request, response) => {
+        if (request.url === '/') {
+          html(response, '<a href="/oversized">Oversized</a>');
+          return;
+        }
+
+        response.end(Buffer.alloc(10 * 1024 * 1024 + 1, 'x'));
+      }),
+    );
+
+    const result = await discover(server.origin);
+    const endpoint = result.endpoints?.find((item) =>
+      item.url.endsWith('/oversized'),
+    );
+
+    expect(result.failedUrls[0]?.error.code).toBe('RESPONSE_TOO_LARGE');
+    expect(endpoint).toMatchObject({ url: `${server.origin}/oversized` });
+    expect(endpoint?.requestFingerprint).toBeUndefined();
+    expect(endpoint?.responseFingerprint).toBeUndefined();
   });
 });
