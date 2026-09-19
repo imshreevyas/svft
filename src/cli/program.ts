@@ -16,6 +16,7 @@ import {
 import { createScanContext } from '../scanner/index.js';
 import type { ScanConfigOverrides, ScanContext } from '../types/index.js';
 import { createProgressPresenter } from './progress.js';
+import { sanitizePublicErrorMessage } from '../output-sanitization.js';
 
 export const VERSION = '0.1.0';
 
@@ -84,7 +85,7 @@ function configOverridesFrom(
 
 function formatScanStart(context: ScanContext): string {
   return (
-    `SVFT — Security Vulnerability Finding Tool\nVersion ${VERSION}\n\n` +
+    `svft-discovery — Safe web discovery\nVersion ${VERSION}\n\n` +
     `Target: ${context.target.normalizedUrl}\n` +
     `Depth: ${String(context.config.crawlDepth)}\n\n`
   );
@@ -98,7 +99,7 @@ export function createProgram(
 
   program
     .name('svft')
-    .description('A simple, CLI-first web VAPT scanner')
+    .description('Safe, bounded same-origin web discovery')
     .version(VERSION)
     .showHelpAfterError()
     .exitOverride()
@@ -219,7 +220,9 @@ export async function executeCli(
     }
 
     if (error instanceof HttpError) {
-      output.stderr(`HTTP error [${error.code}]: ${error.message}\n`);
+      output.stderr(
+        `HTTP error [${error.code}]: ${sanitizePublicErrorMessage(error.message, error.url)}\n`,
+      );
       return 1;
     }
 

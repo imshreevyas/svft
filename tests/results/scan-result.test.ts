@@ -66,4 +66,66 @@ describe('ScanResult', () => {
       ],
     });
   });
+
+  it('redacts sensitive URLs in persisted data without changing the input inventory', () => {
+    const target = createTarget(
+      'https://example.com/path?token=target-secret&filter=recent',
+    );
+    const discovery: DiscoveryResult = {
+      seed: {
+        url: target.normalizedUrl,
+        depth: 0,
+        discoveredFrom: null,
+      },
+      discoveredUrls: [
+        {
+          url: 'https://example.com/next?signature=child-secret&page=2',
+          depth: 1,
+          discoveredFrom: target.normalizedUrl,
+          source: 'url',
+        },
+      ],
+      forms: [
+        {
+          action: 'https://example.com/submit?password=form-secret&mode=edit',
+          method: 'POST',
+          fields: [],
+        },
+      ],
+      requestedCount: 2,
+      failedUrls: [],
+    };
+    const context: ScanContext = {
+      id: 'scan-id',
+      target,
+      config: createScanConfig(),
+      startedAt: new Date('2026-08-27T00:00:00.000Z'),
+    };
+
+    const result = createScanResult(context, discovery);
+    const serialized = JSON.stringify(result);
+
+    expect(discovery.discoveredUrls[0]?.url).toContain('child-secret');
+    expect(result.target).toContain('token=REDACTED');
+    expect(result.discovery.discoveredUrls[0]?.url).toBe(
+      'https://example.com/next?signature=REDACTED&page=2',
+    );
+    expect(result.discovery.forms?.[0]?.action).toBe(
+      'https://example.com/submit?password=REDACTED&mode=edit',
+    );
+    expect(result.targetInventory).toEqual([
+      expect.objectContaining({
+        url: 'https://example.com/next?signature=REDACTED&page=2',
+      }),
+      expect.objectContaining({
+        url: 'https://example.com/submit?password=REDACTED&mode=edit',
+      }),
+    ]);
+    for (const secret of ['target-secret', 'child-secret', 'form-secret']) {
+      expect(serialized).not.toContain(secret);
+    }
+    expect(serialized).toContain('filter=recent');
+    expect(serialized).toContain('page=2');
+    expect(serialized).toContain('mode=edit');
+  });
 });

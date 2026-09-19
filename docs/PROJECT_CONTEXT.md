@@ -1,6 +1,6 @@
 # Project Context
 
-Last updated: 2026-09-19 23:00:00 +05:30
+Last updated: 2026-09-19 23:45:00 +05:30
 
 ## Identity and intent
 
@@ -135,9 +135,9 @@ discover(target: string | URL, options?: DiscoverOptions): Promise<DiscoveryOutp
 
 `DiscoverOptions` contains optional validated `ScanConfigOverrides`, injected `HttpClient`, `AbortSignal`, and synchronous `DiscoveryEventHandler`. `discover()` owns target normalization through `createTarget()` and configuration resolution through `createScanConfig()`; it has no CLI or filesystem dependency.
 
-`DiscoveryOutputV1` has required fields `schemaVersion`, `target`, `configuration`, `seed`, `discoveredUrls`, `forms`, `endpoints`, `failures`, and `statistics`. `schemaVersion` is exactly `svft.discovery/v1`. Configuration excludes request headers. Forms, endpoints, and failures are always arrays. Output preserves normalized concrete URLs and query values, ordered provenance, passive form metadata without values, endpoint parameters, categorized failure data, and request/response fingerprints.
+`DiscoveryOutputV1` has required fields `schemaVersion`, `target`, `configuration`, `seed`, `discoveredUrls`, `forms`, `endpoints`, `failures`, and `statistics`. `schemaVersion` is exactly `svft.discovery/v1`. Configuration excludes request headers. Forms, endpoints, and failures are always arrays. Output preserves normalized concrete URLs, ordinary query values, ordered provenance, passive form metadata without values, endpoint parameters, categorized failure data, and request/response fingerprints. Sensitive query parameter values are redacted at this boundary.
 
-Public output excludes request headers, form values, response bodies, `Error` causes/stacks, redirect/transport internals, and live `URL`/`Target` objects. `SecurityTarget` remains a derived scan-facing model and is not part of DiscoveryOutputV1.
+Public output excludes request headers, form values, response bodies, `Error` causes/stacks, redirect/transport internals, and live `URL`/`Target` objects. Values for `token`, `access_token`, `api_key`, `apikey`, `key`, `secret`, `password`, `code`, `signature`, and comparable credential/session query names are replaced with the deterministic `REDACTED` marker in every public URL field, including forms, endpoints, failures, provenance, and progress events. The crawler and SecurityTarget derivation retain original normalized URLs; only public/persisted output and request fingerprints use the redacted representation. `SecurityTarget` remains a derived scan-facing model and is not part of DiscoveryOutputV1.
 
 Within v1, required fields and meanings, URL normalization, provenance semantics, endpoint identity, and sanitization rules are stable. Additive optional fields are allowed. Removing or renaming fields, changing field types or meanings, changing normalization or identity semantics, or relaxing sanitization requires a new major schema such as `svft.discovery/v2`; v2 is intentionally not implemented.
 
@@ -149,7 +149,7 @@ The CLI feeds these events to a separate compact presenter. It derives queued co
 
 ### ScanResult and persistence
 
-ScanResult is JSON-serializable and contains `scanId`, normalized `target`, ISO `startedAt` and `completedAt`, millisecond `duration`, resolved `configuration`, the existing `discovery` result, and `targetInventory`. Request headers are used in memory but omitted from persisted configuration. URL userinfo is stripped during target/discovery normalization. Each passive security target records normalized URL, GET/POST method, first-seen source, separate parameter-name metadata, and provenance. Exact method + normalized URL is the identity; duplicate targets merge names and provenance in deterministic first-seen order. The derivation preserves concrete GET query values and performs no requests or form submissions. Child HTTP failures are stored as plain code/message/URL data so JSON preserves their meaning. Form field metadata retains names, types, and boolean attributes, but not arbitrary attribute values.
+ScanResult is JSON-serializable and contains `scanId`, normalized `target`, ISO `startedAt` and `completedAt`, millisecond `duration`, resolved `configuration`, the existing `discovery` result, and `targetInventory`. Request headers are used in memory but omitted from persisted configuration. URL userinfo is stripped during target/discovery normalization. Persisted URLs apply the same deterministic sensitive-query redaction as `DiscoveryOutputV1`, while internal SecurityTarget identity retains the original normalized URL. Each passive security target records normalized URL, GET/POST method, first-seen source, separate parameter-name metadata, and provenance. Exact method + normalized URL is the identity; duplicate targets merge names and provenance in deterministic first-seen order. The derivation preserves concrete GET query values and performs no requests or form submissions. Child HTTP failures are stored as plain code/message/URL data so JSON preserves their meaning. Form field metadata retains names, types, and boolean attributes, but not arbitrary attribute values.
 
 After successful discovery, the CLI builds ScanResult and calls the separate ResultWriter. The writer creates `svft-results/` when needed and uses exclusive file creation for `scan-<scanId>.json`. It returns the forward-slash relative path shown in terminal output. Discovery and HTTP perform no filesystem writes.
 
@@ -193,7 +193,7 @@ The Discovery Engine uses the centralized HTTP client and one sequential FIFO wo
 --user-agent <value>
 ```
 
-It prints the normalized target and depth followed by a compact scanner status. TTY output refreshes one logical line; redirected or non-TTY output uses a concise newline fallback without control sequences. Completion output contains target, depth, discovered/requested/failed counts, duration, and the relative JSON path. Detailed URLs exist only in JSON. It never prints response bodies, headers, internal retries, redirect hops, or fake completion percentages.
+It prints the normalized target and depth followed by a compact discovery status. TTY output refreshes one logical line; redirected or non-TTY output uses a concise newline fallback without control sequences. Completion output contains target, depth, discovered/requested/failed counts, duration, and the relative JSON path. Detailed URLs exist only in JSON. It never prints response bodies, headers, internal retries, redirect hops, or fake completion percentages.
 
 A target/configuration/seed failure exits non-zero before ScanResult persistence. A child URL failure is retained in a completed result and does not fail the whole scan. `target check` neither creates `svft-results/` nor performs network activity.
 
@@ -215,6 +215,7 @@ pnpm typecheck
 pnpm lint
 pnpm format:check
 pnpm test
+pnpm test:package
 ```
 
 To make the preserved `svft` command available globally from this checkout:
@@ -229,7 +230,7 @@ The global link targets this checkout. Re-run `pnpm build` after source edits. T
 
 ## Testing position
 
-The suite contains focused deterministic tests for endpoint and parameter extraction, passive JavaScript source/reference discovery, discovery events, JSON persistence, target checking, and fatal scan behavior.
+The suite contains focused deterministic tests for endpoint and parameter extraction, passive JavaScript source/reference discovery, discovery events, JSON persistence, target checking, fatal scan behavior, and built-package exports.
 
 Tests use ephemeral loopback servers and no public internet. HTTPS uses repository-only fixtures and keeps TLS changes request-local. Servers, sockets, and timers are cleaned up.
 
@@ -242,7 +243,7 @@ Tests use ephemeral loopback servers and no public internet. HTTPS uses reposito
 - Keep discovery sequential until concurrency has a concrete design and deterministic tests.
 - Keep discovery limited to URL collection; do not mix in vulnerability behavior.
 - Keep progress events in discovery but all terminal presentation in the CLI.
-- Never display a percentage unless a future scanner has a genuinely known total.
+- Never display a percentage unless a future component has a genuinely known total.
 - Keep ScanResult creation and persistence downstream from DiscoveryResult.
 - Keep JSON as the sole canonical format until another format is explicitly scoped.
 - Add no large dependency without a demonstrated requirement.

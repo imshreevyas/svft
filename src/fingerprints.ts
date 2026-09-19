@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import type { HttpRequest } from './http/request.js';
 import type { HttpResponse } from './http/response.js';
+import { sanitizePublicUrl } from './output-sanitization.js';
 
 function canonicalize(value: unknown): string {
   if (value === null || typeof value !== 'object') {
@@ -47,7 +48,7 @@ export function fingerprintRequest(request: HttpRequest): string {
   url.password = '';
   return digest({
     method: request.method.toUpperCase(),
-    url: url.href,
+    url: sanitizePublicUrl(url.href),
     headers: normalizedHeaders(request.headers),
   });
 }

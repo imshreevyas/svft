@@ -3,6 +3,11 @@ import type {
   ScanContext,
   ScanResult,
 } from '../types/index.js';
+import {
+  sanitizeDiscoveryResult,
+  sanitizePublicUrl,
+  sanitizeSecurityTargets,
+} from '../output-sanitization.js';
 import { createSecurityTargetInventory } from './target-inventory.js';
 
 export function createScanResult(
@@ -10,9 +15,11 @@ export function createScanResult(
   discovery: DiscoveryResult,
   completedAt: Date = new Date(),
 ): ScanResult {
+  const targetInventory = createSecurityTargetInventory(discovery);
+
   return {
     scanId: context.id,
-    target: context.target.normalizedUrl,
+    target: sanitizePublicUrl(context.target.normalizedUrl),
     startedAt: context.startedAt.toISOString(),
     completedAt: completedAt.toISOString(),
     duration: Math.max(0, completedAt.getTime() - context.startedAt.getTime()),
@@ -22,7 +29,7 @@ export function createScanResult(
       // used by the HTTP engine but are deliberately not persisted.
       headers: {},
     },
-    discovery,
-    targetInventory: createSecurityTargetInventory(discovery),
+    discovery: sanitizeDiscoveryResult(discovery),
+    targetInventory: sanitizeSecurityTargets(targetInventory),
   };
 }

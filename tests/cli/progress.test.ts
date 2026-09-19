@@ -101,7 +101,7 @@ describe('compact progress presenter', () => {
     });
 
     const output = writes.join('');
-    expect(output).toContain('\u2713 Scan complete');
+    expect(output).toContain('\u2713 Discovery complete');
     expect(output).toContain('URLs discovered: 7');
     expect(output).toContain('URLs requested: 7');
     expect(output).toContain('Failed: 1');
@@ -126,6 +126,6 @@ describe('compact progress presenter', () => {
 
     expect(writes).toHaveLength(writesAfterFailure);
     expect(writes.at(-1)).toBe('\r\u001B[2K');
-    expect(writes.join('')).not.toContain('Scan complete');
+    expect(writes.join('')).not.toContain('Discovery complete');
   });
 });

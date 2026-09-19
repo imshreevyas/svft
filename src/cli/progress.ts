@@ -81,7 +81,7 @@ export function createProgressPresenter(
       SPINNER_FRAMES[frameIndex % SPINNER_FRAMES.length] ?? '\u280B';
     frameIndex += 1;
     return (
-      `${frame} Scanning${SEPARATOR}${String(requestedCount)} requested` +
+      `${frame} Discovering${SEPARATOR}${String(requestedCount)} requested` +
       `${SEPARATOR}${String(queuedCount())} queued` +
       `${SEPARATOR}${String(failedCount)} failed` +
       `${SEPARATOR}${formatElapsed(now() - startedAt)}`
@@ -150,7 +150,7 @@ export function createProgressPresenter(
         options.write(CLEAR_LINE);
       }
       options.write(
-        '\u2713 Scan complete\n\n' +
+        '\u2713 Discovery complete\n\n' +
           `Target: ${completion.target}\n` +
           `Depth: ${String(completion.depth)}\n\n` +
           `URLs discovered: ${String(completion.discoveredCount)}\n` +

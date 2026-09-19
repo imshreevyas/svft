@@ -2,6 +2,14 @@
   "name": "svft-discovery",
   "version": "0.1.0",
   "description": "Safe, bounded same-origin web discovery for security workflows",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/imshreevyas/svft-discovery.git"
+  },
+  "homepage": "https://github.com/imshreevyas/svft-discovery#readme",
+  "bugs": {
+    "url": "https://github.com/imshreevyas/svft-discovery/issues"
+  },
   "type": "module",
   "exports": {
     ".": {
@@ -30,6 +38,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "test:package": "pnpm build && node scripts/package-smoke.mjs",
     "test:watch": "vitest"
   },
   "keywords": [

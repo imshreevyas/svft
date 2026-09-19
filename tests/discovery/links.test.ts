@@ -161,7 +161,11 @@ describe('discovery link helpers', () => {
     );
 
     expect(forms[0]?.fields).toEqual([
-      { name: 'csrf', type: 'input', attributes: { type: 'hidden', required: true } },
+      {
+        name: 'csrf',
+        type: 'input',
+        attributes: { type: 'hidden', required: true },
+      },
     ]);
     expect(JSON.stringify(forms)).not.toContain('session-secret');
   });

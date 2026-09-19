@@ -68,20 +68,17 @@ describe('public discovery API', () => {
   it('normalizes string and URL targets, configuration, output, and statistics', async () => {
     const signals: (AbortSignal | undefined)[] = [];
     const events: string[] = [];
-    const client = clientFor(
-      (url) => {
-        if (url.endsWith('/robots.txt') || url.endsWith('/sitemap.xml')) {
-          return response(url, '');
-        }
-        if (url.endsWith('/next?item=42')) return response(url, '<html></html>');
-        return response(
-          url,
-          '<html><a href="/next?item=42">Next</a><form action="/submit" method="post"><input name="query" type="text"></form></html>',
-          true,
-        );
-      },
-      signals,
-    );
+    const client = clientFor((url) => {
+      if (url.endsWith('/robots.txt') || url.endsWith('/sitemap.xml')) {
+        return response(url, '');
+      }
+      if (url.endsWith('/next?item=42')) return response(url, '<html></html>');
+      return response(
+        url,
+        '<html><a href="/next?item=42">Next</a><form action="/submit" method="post"><input name="query" type="text"></form></html>',
+        true,
+      );
+    }, signals);
     const signal = new AbortController().signal;
 
     const output = await discover(
@@ -106,9 +103,7 @@ describe('public discovery API', () => {
       'https://example.com/next?item=42',
     );
     expect(output.forms[0]?.action).toBe('https://example.com/submit');
-    expect(output.endpoints[0]?.requestFingerprint).toBe(
-      'request-fingerprint',
-    );
+    expect(output.endpoints[0]?.requestFingerprint).toBe('request-fingerprint');
     expect(output.endpoints[0]?.responseFingerprint).toBe(
       'response-fingerprint',
     );
@@ -160,17 +155,88 @@ describe('public discovery API', () => {
     const serialized = JSON.stringify(output);
 
     expect(output.discoveredUrls[1]?.url).toBe(
-      'https://example.com/failed?token=42',
+      'https://example.com/failed?token=REDACTED',
     );
     expect(output.failures[0]?.error).toEqual({
       code: 'CONNECTION_FAILURE',
       message: 'child request failed',
-      url: 'https://example.com/failed?token=42',
+      url: 'https://example.com/failed?token=REDACTED',
     });
     expect(serialized).not.toContain('response-body-secret');
     expect(serialized).not.toContain('form-value-secret');
     expect(serialized).not.toContain('cause-secret');
     expect(serialized).not.toContain('stack');
+  });
+
+  it('redacts sensitive query values only at the public output boundary', async () => {
+    const requestedUrls: string[] = [];
+    const eventUrls: string[] = [];
+    const client: HttpClient = {
+      request: (request) => {
+        requestedUrls.push(request.url.href);
+
+        if (
+          request.url.pathname === '/robots.txt' ||
+          request.url.pathname === '/sitemap.xml'
+        ) {
+          return Promise.resolve(response(request.url.href, ''));
+        }
+        if (request.url.pathname === '/start') {
+          return Promise.resolve(
+            response(
+              request.url.href,
+              '<html><a href="/next?token=child-secret&term=cat">Next</a><form action="/submit?api_key=form-secret&flow=keep"><input name="query"></form></html>',
+            ),
+          );
+        }
+        return Promise.reject(
+          new HttpError(
+            'CONNECTION_FAILURE',
+            `Request failed for ${request.url.href}`,
+            request.url.href,
+          ),
+        );
+      },
+    };
+
+    const output = await discover(
+      'https://example.com/start?access_token=target-secret&mode=normal',
+      {
+        config: { crawlDepth: 1 },
+        client,
+        onEvent: (event) => {
+          if ('url' in event) eventUrls.push(event.url);
+        },
+      },
+    );
+    const serialized = JSON.stringify(output);
+
+    expect(requestedUrls).toContain(
+      'https://example.com/next?token=child-secret&term=cat',
+    );
+    expect(output.target).toBe(
+      'https://example.com/start?access_token=REDACTED&mode=normal',
+    );
+    expect(output.discoveredUrls.map((item) => item.url)).toContain(
+      'https://example.com/next?token=REDACTED&term=cat',
+    );
+    expect(output.forms[0]?.action).toBe(
+      'https://example.com/submit?api_key=REDACTED&flow=keep',
+    );
+    expect(
+      output.endpoints.find((endpoint) => endpoint.url.includes('/next'))?.url,
+    ).toBe('https://example.com/next?token=REDACTED&term=cat');
+    expect(output.failures[0]?.error.url).toBe(
+      'https://example.com/next?token=REDACTED&term=cat',
+    );
+    expect(output.failures[0]?.error.message).not.toContain('child-secret');
+    expect(eventUrls.every((url) => !url.includes('child-secret'))).toBe(true);
+    for (const secret of ['target-secret', 'child-secret', 'form-secret']) {
+      expect(serialized).not.toContain(secret);
+    }
+    expect(serialized).toContain('mode=normal');
+    expect(serialized).toContain('term=cat');
+    expect(serialized).toContain('flow=keep');
   });
 
   it('returns empty form and failure arrays when no optional records exist', async () => {

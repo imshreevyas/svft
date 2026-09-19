@@ -78,7 +78,7 @@ Within the same depth boundary, eligible HTML responses also contribute script `
 
 Before normal URL traversal, discovery passively requests same-origin `/robots.txt` once, extracts Sitemap directives (falling back to `/sitemap.xml` when needed), and processes bounded sitemap URL/index documents. External sitemap references and sitemap loops are ignored; sitemap documents are not application endpoints. Internal limits cap processing at 32 sitemap documents, 1,000 sitemap URL entries, and 10,000 discovered application URLs per scan. Discovery accepts an optional `AbortSignal` and passes it through passive/application requests, retry waits, request delays, parsing checks, and child scheduling.
 
-Fetched URL evidence includes canonical request and response fingerprints. Response bodies are hashed in memory; sensitive headers are excluded from fingerprints.
+Fetched URL evidence includes canonical request and response fingerprints. Response bodies are hashed in memory; sensitive headers are excluded from fingerprints, and sensitive query parameter values are redacted before request URLs enter a fingerprint.
 
 Declared `text/html` and `application/xhtml+xml` responses are parsed. A response with another declared media type is not parsed. If `Content-Type` is absent, only a body beginning like an HTML document is accepted as a conservative fallback.
 
@@ -102,7 +102,7 @@ No percentage is shown because discovery cannot know its final URL count in adva
 
 `SecurityTarget` is the passive, test-ready identity derived from existing DiscoveryResult data: normalized URL, GET/POST method, first-seen source, ordered parameter names, and ordered provenance. Its identity is exact method plus normalized URL, so GET and POST remain separate and concrete GET query values are preserved. Duplicate identities merge parameter names and provenance while retaining deterministic first-seen order. Derivation performs no requests, form submissions, payload generation, or vulnerability inference.
 
-`ScanResult` is the canonical serializable scan record. It contains the ScanContext ID, normalized target, ISO start/completion times, duration in milliseconds, resolved configuration, DiscoveryResult, and the derived `targetInventory`. Configured request headers are omitted from persisted configuration, and form fields retain only non-value metadata. It deliberately has no findings field because vulnerability testing does not exist.
+`ScanResult` is the canonical serializable scan record. It contains the ScanContext ID, normalized target, ISO start/completion times, duration in milliseconds, resolved configuration, DiscoveryResult, and the derived `targetInventory`. Configured request headers are omitted from persisted configuration, form fields retain only non-value metadata, and sensitive query parameter values are replaced with `REDACTED` in every persisted URL. This output transform occurs after discovery and SecurityTarget identity derivation, so request URLs and identity remain unchanged. It deliberately has no findings field because vulnerability testing does not exist.
 
 ## Result persistence
 
@@ -118,7 +118,7 @@ Discovery and HTTP do not import the writer and perform no filesystem operations
 
 ## Testing
 
-Transport, discovery, and CLI integration tests use ephemeral loopback servers. Discovery coverage includes depth boundaries, URL/forms/scripts, normalization, query preservation, fragments, origin/port rules, static filtering, HTML/JavaScript media detection, redirects, deduplication, FIFO continuation, delay, failures, passive form extraction, and passive JavaScript reference extraction. Target-inventory tests cover URL, form, sitemap, JavaScript, method/path identity, query preservation, metadata/provenance merging, deterministic order, and zero network traffic. HTTPS tests use repository fixtures and never alter global TLS settings.
+Transport, discovery, and CLI integration tests use ephemeral loopback servers. Discovery coverage includes depth boundaries, URL/forms/scripts, normalization, query preservation, fragments, origin/port rules, static filtering, HTML/JavaScript media detection, redirects, deduplication, FIFO continuation, delay, failures, passive form extraction, and passive JavaScript reference extraction. Target-inventory tests cover URL, form, sitemap, JavaScript, method/path identity, query preservation, metadata/provenance merging, deterministic order, and zero network traffic. The `test:package` release smoke check imports both published export paths from generated `dist`. HTTPS tests use repository fixtures and never alter global TLS settings.
 
 ## Ownership boundary
 

@@ -114,9 +114,9 @@ discover(
 }
 ```
 
-`discoveredUrls` preserve normalized concrete URLs, depth, parent URL, source, and ordered provenance. `forms` contain normalized same-origin GET/POST actions and field names/types/boolean metadata, never values. `endpoints` combine URL and form metadata; identity is method + normalized path + query-name shape, while the first-seen concrete query values are retained. `failures` are safe plain code/message/URL records. `statistics` reports requested, discovered, form, endpoint, and failure counts.
+`discoveredUrls` preserve normalized concrete URLs, depth, parent URL, source, and ordered provenance. `forms` contain normalized same-origin GET/POST actions and field names/types/boolean metadata, never values. `endpoints` combine URL and form metadata; identity is method + normalized path + query-name shape. Ordinary query values are retained, while sensitive parameter values are replaced with the deterministic `REDACTED` marker. `failures` are safe plain code/message/URL records. `statistics` reports requested, discovered, form, endpoint, and failure counts.
 
-The configuration in this public output excludes request headers. The output also excludes response bodies, form values, errors' causes/stacks, redirect/transport internals, and live `URL`/`Target` objects. Within v1, required fields, URL normalization, provenance meanings, endpoint identity, and these sanitization rules are stable. Compatible additions may be optional; incompatible changes require a new schema version.
+The configuration in this public output excludes request headers. The output also excludes response bodies, form values, errors' causes/stacks, redirect/transport internals, and live `URL`/`Target` objects. URL query parameters named `token`, `access_token`, `api_key`, `apikey`, `key`, `secret`, `password`, `code`, `signature`, and comparable credential/session names are retained by name but have their values replaced with `REDACTED` everywhere a public URL is exposed, including failure URLs and provenance. Request fingerprints use that same sanitized URL representation. Within v1, required fields, URL normalization, provenance meanings, endpoint identity, and these sanitization rules are stable. Compatible additions may be optional; incompatible changes require a new schema version.
 
 The CLI's scan record is a downstream `ScanResult` JSON document. It adds scan identity/timing, resolved configuration with empty persisted headers, the discovery result, and a derived passive target inventory.
 
@@ -127,7 +127,7 @@ The CLI's scan record is a downstream `ScanResult` JSON document. It adds scan i
 - TLS verification is enabled by default and is request-local.
 - Crawling is sequential, depth-bounded, deduplicated, and capped for sitemap and discovered-URL processing.
 - JavaScript is treated as text only; it is never executed.
-- Credentials in target URLs are stripped before discovery/results, and sensitive headers are excluded from persisted output and fingerprints.
+- Credentials in target URLs are stripped before discovery/results; sensitive query values are redacted from public/persisted URLs and request fingerprints; sensitive headers are excluded from persisted output and fingerprints.
 
 Discovery still sends network requests to authorized same-origin targets. A completed run means discovery completed within its configured boundary; it does not mean the target is secure.
 
@@ -139,6 +139,7 @@ pnpm typecheck
 pnpm lint
 pnpm format:check
 pnpm test
+pnpm test:package
 pnpm build
 ```
 

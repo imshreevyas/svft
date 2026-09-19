@@ -1,5 +1,21 @@
-svft change log
+svft-discovery change log
 All timestamps use Asia/Calcutta (UTC+05:30).
+
+[2026-09-19 23:45:00 +05:30] Prepared first public release metadata and checks
+- Replaced stale generic CLI and contributor branding with the standalone
+  `svft-discovery` identity while preserving the `svft` command.
+- Added GitHub repository, homepage, and issue-tracker package metadata.
+- Added a dependency-free built-package smoke check for the root and discovery
+  export paths, and documented it in the contributor workflow.
+
+[2026-09-19 23:30:00 +05:30] Redacted sensitive query values at output boundaries
+- Added deterministic `REDACTED` query-value sanitization for public Discovery v1
+  output, persisted scan results, progress events, CLI HTTP errors, and request
+  fingerprints.
+- Kept internal crawler request URLs and SecurityTarget identity unchanged while
+  preserving ordinary query values, parameter names, and URL structure.
+- Documented the frozen v1 sanitization rule and added regression coverage for
+  public, persisted, and fingerprint output.
 
 [2026-09-19 23:00:00 +05:30] Extracted standalone svft-discovery project identity
 - Renamed the package identity to `svft-discovery` while preserving the `svft`
@@ -201,8 +217,8 @@ All timestamps use Asia/Calcutta (UTC+05:30).
   flags, and links to project records while keeping it below 250 lines.
 - Updated docs/PROJECT_CONTEXT.md and docs/ARCHITECTURE.md for the configuration
   model, current command flow, test coverage, and implementation boundary.
-- No HTTP requests, crawling, technology detection, browser automation, or VAPT
-  rules were added.
+- No HTTP requests, crawling, technology detection, browser automation, or
+  active-testing rules were added.
 
 [2026-08-26 23:53:45 +05:30] Step 2.1 configuration completion
 - Expanded `svft scan` with redirect toggles, maximum redirects, concurrency, crawl

@@ -1,7 +1,14 @@
 import { createScanConfig } from '../core/index.js';
 import { createTarget } from '../core/index.js';
-import type { HttpClient } from '../http/index.js';
+import { HttpError, type HttpClient } from '../http/index.js';
+import {
+  sanitizeDiscoveryEvent,
+  sanitizeDiscoveryResult,
+  sanitizePublicErrorMessage,
+  sanitizePublicUrl,
+} from '../output-sanitization.js';
 import type {
+  DiscoveryResult,
   DiscoveryEventHandler,
   DiscoveryOutputV1,
   ScanConfigOverrides,
@@ -23,29 +30,49 @@ export async function discover(
     typeof target === 'string' ? target : target.href,
   );
   const configuration = createScanConfig(options.config);
-  const result = await discoverUrls(normalizedTarget, configuration, {
-    ...(options.client === undefined ? {} : { client: options.client }),
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
-    ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }),
-  });
+  let result: DiscoveryResult;
+
+  try {
+    result = await discoverUrls(normalizedTarget, configuration, {
+      ...(options.client === undefined ? {} : { client: options.client }),
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      ...(options.onEvent === undefined
+        ? {}
+        : {
+            onEvent: (event) =>
+              options.onEvent?.(sanitizeDiscoveryEvent(event)),
+          }),
+    });
+  } catch (error: unknown) {
+    if (error instanceof HttpError) {
+      throw new HttpError(
+        error.code,
+        sanitizePublicErrorMessage(error.message, error.url),
+        sanitizePublicUrl(error.url),
+      );
+    }
+    throw error;
+  }
+
+  const sanitizedResult = sanitizeDiscoveryResult(result);
   const { headers, ...sanitizedConfiguration } = configuration;
   void headers;
-  const forms = result.forms ?? [];
-  const endpoints = result.endpoints ?? [];
-  const failures = result.failedUrls;
+  const forms = sanitizedResult.forms ?? [];
+  const endpoints = sanitizedResult.endpoints ?? [];
+  const failures = sanitizedResult.failedUrls;
 
   return {
     schemaVersion: 'svft.discovery/v1',
-    target: normalizedTarget.normalizedUrl,
+    target: sanitizePublicUrl(normalizedTarget.normalizedUrl),
     configuration: sanitizedConfiguration,
-    seed: result.seed,
-    discoveredUrls: result.discoveredUrls,
+    seed: sanitizedResult.seed,
+    discoveredUrls: sanitizedResult.discoveredUrls,
     forms,
     endpoints,
     failures,
     statistics: {
-      requestedCount: result.requestedCount,
-      discoveredUrlCount: result.discoveredUrls.length,
+      requestedCount: sanitizedResult.requestedCount,
+      discoveredUrlCount: sanitizedResult.discoveredUrls.length,
       formCount: forms.length,
       endpointCount: endpoints.length,
       failureCount: failures.length,

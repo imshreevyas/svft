@@ -115,12 +115,12 @@ describe('scan command discovery integration', () => {
     const result = capture.stdout.join('');
     expect(exitCode).toBe(0);
     expect(requests).toBe(1);
-    expect(result).toContain('SVFT — Security Vulnerability Finding Tool');
+    expect(result).toContain('svft-discovery — Safe web discovery');
     expect(result).toContain('Version 0.1.0');
     expect(result).toContain(`Target: ${server.origin}/`);
     expect(result).toContain('Depth: 0');
-    expect(result).toContain('Scanning · 1 requested · 0 queued · 0 failed');
-    expect(result).toContain('✓ Scan complete');
+    expect(result).toContain('Discovering · 1 requested · 0 queued · 0 failed');
+    expect(result).toContain('✓ Discovery complete');
     expect(result).toContain('URLs discovered: 1');
     expect(result).toContain('URLs requested: 1');
     expect(result).toContain('Failed: 0');
@@ -219,7 +219,7 @@ describe('scan command discovery integration', () => {
     );
 
     expect(exitCode).toBe(1);
-    expect(capture.stdout.join('')).toContain('Scanning · 1 requested');
+    expect(capture.stdout.join('')).toContain('Discovering · 1 requested');
     expect(capture.stderr.join('')).toContain(
       'HTTP error [CONNECTION_FAILURE]',
     );
@@ -236,7 +236,7 @@ describe('scan command discovery integration', () => {
     );
 
     expect(exitCode).toBe(1);
-    expect(capture.stdout.join('')).toContain('Scanning · 1 requested');
+    expect(capture.stdout.join('')).toContain('Discovering · 1 requested');
     expect(capture.stderr.join('')).toContain('HTTP error [TIMEOUT]');
     expect(await readdir(workingDirectory)).toEqual([]);
   });

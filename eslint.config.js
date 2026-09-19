@@ -13,7 +13,10 @@ export default defineConfig(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['eslint.config.js'],
+          allowDefaultProject: [
+            'eslint.config.js',
+            'scripts/package-smoke.mjs',
+          ],
         },
         tsconfigRootDir: import.meta.dirname,
       },

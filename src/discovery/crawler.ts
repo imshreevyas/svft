@@ -80,10 +80,19 @@ async function waitForDelay(
   throwIfAborted(signal, url);
   if (milliseconds === 0) return;
   try {
-    await delay(milliseconds, undefined, signal === undefined ? {} : { signal });
+    await delay(
+      milliseconds,
+      undefined,
+      signal === undefined ? {} : { signal },
+    );
   } catch (cause: unknown) {
     if (signal?.aborted) {
-      throw new HttpError('ABORTED', `Discovery was aborted: ${url}`, url, cause);
+      throw new HttpError(
+        'ABORTED',
+        `Discovery was aborted: ${url}`,
+        url,
+        cause,
+      );
     }
     throw cause;
   }
@@ -414,8 +423,8 @@ export async function discoverUrls(
         const nextDepth = current.depth + 1;
 
         if (current.depth < config.crawlDepth) {
-        for (const source of extractScriptSources(response.body)) {
-          throwIfAborted(signal, current.url);
+          for (const source of extractScriptSources(response.body)) {
+            throwIfAborted(signal, current.url);
             const scriptUrl = normalizeDiscoveredUrl(source, baseUrl);
             if (
               scriptUrl === null ||
@@ -664,7 +673,11 @@ export async function discoverUrls(
         report(options.onEvent, event);
       }
     } catch (error: unknown) {
-      if (signal?.aborted || !(error instanceof HttpError) || current.depth === 0) {
+      if (
+        signal?.aborted ||
+        !(error instanceof HttpError) ||
+        current.depth === 0
+      ) {
         throw error;
       }
 

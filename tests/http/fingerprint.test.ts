@@ -6,9 +6,12 @@ import {
 } from '../../src/fingerprints.js';
 import type { HttpRequest, HttpResponse } from '../../src/http/index.js';
 
-const request = (headers: Readonly<Record<string, string>>): HttpRequest => ({
+const request = (
+  headers: Readonly<Record<string, string>>,
+  url = 'https://example.com/path#fragment',
+): HttpRequest => ({
   method: 'GET',
-  url: new URL('https://example.com/path#fragment'),
+  url: new URL(url),
   headers,
 });
 
@@ -59,11 +62,21 @@ describe('fingerprints', () => {
         request({ Authorization: 'Bearer one', Accept: 'text/html' }),
       ),
     ).toBe(
+      fingerprintRequest({
+        ...request({ Authorization: 'Bearer two', Accept: 'text/html' }),
+        url: new URL('https://user:password@example.com/path#other'),
+      }),
+    );
+  });
+
+  it('does not fingerprint sensitive query values', () => {
+    expect(
       fingerprintRequest(
-        {
-          ...request({ Authorization: 'Bearer two', Accept: 'text/html' }),
-          url: new URL('https://user:password@example.com/path#other'),
-        },
+        request({}, 'https://example.com/path?token=first-secret&item=1'),
+      ),
+    ).toBe(
+      fingerprintRequest(
+        request({}, 'https://example.com/path?token=second-secret&item=1'),
       ),
     );
   });
