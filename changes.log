@@ -1,6 +1,15 @@
 svft change log
 All timestamps use Asia/Calcutta (UTC+05:30).
 
+[2026-09-19 22:30:00 +05:30] Froze the standalone Discovery v1 contract
+- Added the package root and discovery subpath exports for `discover()` and the
+  approved Discovery domain types only; crawler and extraction modules remain
+  internal.
+- Documented the required `svft.discovery/v1` fields, sanitization boundary,
+  preservation guarantees, and breaking-change rules.
+- Added contract coverage for narrowed exports and exclusion of response bodies,
+  form values, and Error causes/stacks.
+
 [2026-09-19 13:50:00 +05:30] Hardened Discovery result persistence
 - Removed URL userinfo and configured request headers from persisted scan data.
 - Restricted passive form field metadata to names, types, and boolean attributes;

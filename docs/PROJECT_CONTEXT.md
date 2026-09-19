@@ -1,6 +1,6 @@
 # Project Context
 
-Last updated: 2026-08-30 00:25:00 +05:30
+Last updated: 2026-09-19 22:30:00 +05:30
 
 ## Identity and intent
 
@@ -124,6 +124,22 @@ The request model contains method, URL, request headers, optional abort signal, 
 `DiscoveryResult` contains the seed, ordered `discoveredUrls`, passive ordered `forms`, `requestedCount`, and `failedUrls`. A child failure is recorded while FIFO processing continues. A seed failure remains fatal for the CLI. Forms contain normalized same-origin actions, GET/POST methods, ordered field metadata without values, and the same provenance representation as URLs.
 
 It also contains an endpoint inventory. `DiscoveredEndpoint` unifies URL links, passive JavaScript references, and forms with one source value (`url`, `sitemap`, `robots`, `javascript`, or `form`), while ordered `DiscoveredParameter` entries identify query or form names without values. Endpoint identity is method + normalized path + query-name shape, so query values remain in the first-seen URL while equivalent values merge. Equivalent endpoints and parameters are deduplicated while retaining first-seen provenance. Across URLs, forms, endpoints, and SecurityTargets, each provenance entry means the actual mechanism, concrete producing URL, and discovery depth; multiple paths merge in first-seen order without inferred entries. Fetched URL endpoints may include canonical request and response fingerprints; fingerprints never persist additional response bodies or form values. The implemented flow is `Target -> ScanConfig -> ScanContext -> HTTP Engine -> HTML/sitemap/JavaScript/form discovery -> Endpoint/Parameter inventory -> request/response fingerprints -> DiscoveryResult -> Security Target Inventory -> ScanResult -> JSON`.
+
+### Frozen public Discovery API
+
+The package public API is the root `svft` export and the equivalent `svft/discovery` subpath. Both expose only `discover()` and the approved Discovery domain types; extraction helpers, `discoverUrls()`, crawler options, `Target`, `ScanContext`, `SecurityTarget`, and transport response models are not public API.
+
+```ts
+discover(target: string | URL, options?: DiscoverOptions): Promise<DiscoveryOutputV1>
+```
+
+`DiscoverOptions` contains optional validated `ScanConfigOverrides`, injected `HttpClient`, `AbortSignal`, and synchronous `DiscoveryEventHandler`. `discover()` owns target normalization through `createTarget()` and configuration resolution through `createScanConfig()`; it has no CLI or filesystem dependency.
+
+`DiscoveryOutputV1` has required fields `schemaVersion`, `target`, `configuration`, `seed`, `discoveredUrls`, `forms`, `endpoints`, `failures`, and `statistics`. `schemaVersion` is exactly `svft.discovery/v1`. Configuration excludes request headers. Forms, endpoints, and failures are always arrays. Output preserves normalized concrete URLs and query values, ordered provenance, passive form metadata without values, endpoint parameters, categorized failure data, and request/response fingerprints.
+
+Public output excludes request headers, form values, response bodies, `Error` causes/stacks, redirect/transport internals, and live `URL`/`Target` objects. `SecurityTarget` remains a derived scan-facing model and is not part of DiscoveryOutputV1.
+
+Within v1, required fields and meanings, URL normalization, provenance semantics, endpoint identity, and sanitization rules are stable. Additive optional fields are allowed. Removing or renaming fields, changing field types or meanings, changing normalization or identity semantics, or relaxing sanitization requires a new major schema such as `svft.discovery/v2`; v2 is intentionally not implemented.
 
 ### Progress events
 

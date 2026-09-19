@@ -1,4 +1,4 @@
-export { discover, type DiscoverOptions } from './public.js';
+export { discover, type DiscoverOptions } from './discovery/index.js';
 export type {
   DiscoveredEndpoint,
   DiscoveredForm,
@@ -19,6 +19,6 @@ export type {
   DiscoveryStatistics,
   DiscoveryUrlDiscoveredEvent,
   DiscoveryUrlSkippedEvent,
-} from '../types/index.js';
-export type { HttpClient } from '../http/index.js';
-export type { ScanConfigOverrides } from '../types/index.js';
+  ScanConfigOverrides,
+} from './discovery/index.js';
+export type { HttpClient } from './discovery/index.js';

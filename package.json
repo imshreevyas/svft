@@ -3,6 +3,16 @@
   "version": "0.1.0",
   "description": "A simple, CLI-first web VAPT scanner",
   "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./discovery": {
+      "types": "./dist/discovery/index.d.ts",
+      "import": "./dist/discovery/index.js"
+    }
+  },
   "bin": {
     "svft": "./dist/cli/index.js"
   },

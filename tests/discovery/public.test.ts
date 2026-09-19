@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { discover } from '../../src/discovery/index.js';
+import { HttpError } from '../../src/http/index.js';
 import type { HttpClient, HttpResponse } from '../../src/http/index.js';
 
 function response(
@@ -83,6 +84,9 @@ describe('public discovery API', () => {
     expect(output.endpoints[0]?.requestFingerprint).toBe(
       'request-fingerprint',
     );
+    expect(output.endpoints[0]?.responseFingerprint).toBe(
+      'response-fingerprint',
+    );
     expect(output.statistics).toEqual({
       requestedCount: 2,
       discoveredUrlCount: 2,
@@ -94,6 +98,54 @@ describe('public discovery API', () => {
     expect(signals.length).toBeGreaterThan(0);
     expect(signals.every((value) => value === signal)).toBe(true);
     expect(events).toContain('discovery-completed');
+  });
+
+  it('does not expose response bodies, form values, or error causes', async () => {
+    const client: HttpClient = {
+      request: (request) => {
+        if (
+          request.url.pathname === '/robots.txt' ||
+          request.url.pathname === '/sitemap.xml'
+        ) {
+          return Promise.resolve(response(request.url.href, ''));
+        }
+        if (request.url.pathname === '/') {
+          return Promise.resolve(
+            response(
+              request.url.href,
+              '<html>response-body-secret<a href="/failed?token=42">Fail</a><form action="/submit"><input name="query" value="form-value-secret"></form></html>',
+            ),
+          );
+        }
+        return Promise.reject(
+          new HttpError(
+            'CONNECTION_FAILURE',
+            'child request failed',
+            request.url.href,
+            new Error('cause-secret'),
+          ),
+        );
+      },
+    };
+
+    const output = await discover('https://example.com', {
+      config: { crawlDepth: 1 },
+      client,
+    });
+    const serialized = JSON.stringify(output);
+
+    expect(output.discoveredUrls[1]?.url).toBe(
+      'https://example.com/failed?token=42',
+    );
+    expect(output.failures[0]?.error).toEqual({
+      code: 'CONNECTION_FAILURE',
+      message: 'child request failed',
+      url: 'https://example.com/failed?token=42',
+    });
+    expect(serialized).not.toContain('response-body-secret');
+    expect(serialized).not.toContain('form-value-secret');
+    expect(serialized).not.toContain('cause-secret');
+    expect(serialized).not.toContain('stack');
   });
 
   it('returns empty form and failure arrays when no optional records exist', async () => {
@@ -112,5 +164,11 @@ describe('public discovery API', () => {
     expect(output.endpoints).toEqual([
       expect.objectContaining({ url: 'https://example.com/' }),
     ]);
+  });
+
+  it('keeps the stable module export surface narrow', async () => {
+    const publicModule = await import('../../src/discovery/index.js');
+
+    expect(Object.keys(publicModule)).toEqual(['discover']);
   });
 });
