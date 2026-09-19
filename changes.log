@@ -9,6 +9,14 @@ All timestamps use Asia/Calcutta (UTC+05:30).
   of persisted discovery evidence, with regression coverage for fingerprints and
   result construction.
 
+[2026-09-19 21:55:00 +05:30] Bounded standalone Discovery resources and cancellation
+- Added a 10,000-URL application discovery cap and a 10 MiB HTTP response-body
+  cap to prevent unbounded queue growth and parsing memory use.
+- Added optional Discovery AbortSignal support across passive/application HTTP
+  requests, retry waits, request delays, parsing checks, and child scheduling.
+- Added regression coverage for oversized responses and pre-request/active
+  discovery cancellation.
+
 [2026-09-19 14:17:00 +05:30] Applied static-resource filtering to sitemap URLs
 - Kept sitemap URL-set entries consistent with HTML discovery by excluding
   common static-resource extensions before queueing or requesting them.

@@ -37,6 +37,7 @@ const RETRYABLE_TRANSPORT_CODES = new Set([
   'ETIMEDOUT',
 ]);
 const REDIRECT_STATUS_CODES = new Set([301, 302, 303, 307, 308]);
+const MAX_RESPONSE_BYTES = 10 * 1024 * 1024;
 const TLS_ERROR_CODES = new Set([
   'CERT_HAS_EXPIRED',
   'DEPTH_ZERO_SELF_SIGNED_CERT',
@@ -223,13 +224,36 @@ function collectResponse(
   reject: (reason: HttpError) => void,
 ): void {
   const chunks: Buffer[] = [];
+  let receivedBytes = 0;
+  let settled = false;
+
+  const rejectOnce = (error: HttpError): void => {
+    if (settled) return;
+    settled = true;
+    reject(error);
+  };
 
   response.on('data', (chunk: Buffer | string) => {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    if (settled) return;
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    receivedBytes += buffer.length;
+    if (receivedBytes > MAX_RESPONSE_BYTES) {
+      rejectOnce(
+        new HttpError(
+          'RESPONSE_TOO_LARGE',
+          `HTTP response exceeded the ${String(MAX_RESPONSE_BYTES)} byte limit: ${url.href}`,
+          url.href,
+        ),
+      );
+      response.destroy();
+      return;
+    }
+    chunks.push(buffer);
   });
   response.once('end', () => {
+    if (settled) return;
     if (response.statusCode === undefined) {
-      reject(
+      rejectOnce(
         new HttpError(
           'CONNECTION_FAILURE',
           `HTTP response did not include a status code: ${url.href}`,
@@ -239,6 +263,7 @@ function collectResponse(
       return;
     }
 
+    settled = true;
     resolve({
       statusCode: response.statusCode,
       statusMessage: response.statusMessage,
@@ -247,7 +272,7 @@ function collectResponse(
     });
   });
   response.once('aborted', () => {
-    reject(
+    rejectOnce(
       new HttpError(
         'ABORTED',
         `HTTP response was aborted: ${url.href}`,
@@ -256,7 +281,8 @@ function collectResponse(
     );
   });
   response.once('error', (cause: Error) => {
-    reject(mapRequestError(cause, url, undefined));
+    if (settled) return;
+    rejectOnce(mapRequestError(cause, url, undefined));
   });
 }
 

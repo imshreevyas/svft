@@ -114,6 +114,18 @@ describe('HTTP client', () => {
     expect(response.body).toBe('SVFT response body');
   });
 
+  it('rejects responses that exceed the body-size limit', async () => {
+    const server = await track(
+      startHttpServer((_request, response) => {
+        response.end(Buffer.alloc(10 * 1024 * 1024 + 1, 'x'));
+      }),
+    );
+
+    await expect(get(server.origin)).rejects.toMatchObject({
+      code: 'RESPONSE_TOO_LARGE',
+    });
+  });
+
   it('measures total response time with a monotonic timer', async () => {
     const server = await track(
       startHttpServer((_request, response) => {

@@ -37,6 +37,7 @@ import {
 
 const MAX_SITEMAP_DOCUMENTS = 32;
 const MAX_SITEMAP_URLS = 1_000;
+const MAX_DISCOVERED_URLS = 10_000;
 
 function formIdentity(form: DiscoveredForm): string {
   const fields = form.fields.map((field) => ({
@@ -58,6 +59,34 @@ function formIdentity(form: DiscoveredForm): string {
 export interface DiscoveryOptions {
   readonly client?: HttpClient;
   readonly onEvent?: DiscoveryEventHandler;
+  readonly signal?: AbortSignal;
+}
+
+function throwIfAborted(signal: AbortSignal | undefined, url: string): void {
+  if (!signal?.aborted) return;
+  throw new HttpError(
+    'ABORTED',
+    `Discovery was aborted: ${url}`,
+    url,
+    signal.reason,
+  );
+}
+
+async function waitForDelay(
+  milliseconds: number,
+  signal: AbortSignal | undefined,
+  url: string,
+): Promise<void> {
+  throwIfAborted(signal, url);
+  if (milliseconds === 0) return;
+  try {
+    await delay(milliseconds, undefined, signal === undefined ? {} : { signal });
+  } catch (cause: unknown) {
+    if (signal?.aborted) {
+      throw new HttpError('ABORTED', `Discovery was aborted: ${url}`, url, cause);
+    }
+    throw cause;
+  }
 }
 
 function report(
@@ -121,17 +150,20 @@ export async function discoverUrls(
   let queueIndex = 0;
   let requestedCount = 0;
   let passiveRequestCount = 0;
+  const signal = options.signal;
 
   // Robots and sitemap retrieval are passive metadata requests and never enter
   // the application URL queue or endpoint inventory.
   try {
     if (passiveRequestCount > 0 && config.requestDelay > 0) {
-      await delay(config.requestDelay);
+      await waitForDelay(config.requestDelay, signal, target.normalizedUrl);
     }
+    throwIfAborted(signal, target.normalizedUrl);
     const robots = await client.request({
       method: 'GET',
       url: new URL('/robots.txt', target.url),
       headers: {},
+      ...(signal === undefined ? {} : { signal }),
       canFollowRedirect: (url) => url.origin === seedOrigin,
     });
     passiveRequestCount += 1;
@@ -162,7 +194,8 @@ export async function discoverUrls(
         sitemapUrls.push(fallback.href);
       }
     }
-  } catch {
+  } catch (error: unknown) {
+    if (signal?.aborted) throw error;
     // Robots is optional; normal URL discovery continues on failure.
   }
 
@@ -178,12 +211,14 @@ export async function discoverUrls(
     if (sitemapUrl === undefined) continue;
     try {
       if (passiveRequestCount > 0 && config.requestDelay > 0) {
-        await delay(config.requestDelay);
+        await waitForDelay(config.requestDelay, signal, sitemapUrl);
       }
+      throwIfAborted(signal, sitemapUrl);
       const response = await client.request({
         method: 'GET',
         url: new URL(sitemapUrl),
         headers: {},
+        ...(signal === undefined ? {} : { signal }),
         canFollowRedirect: (url) => url.origin === seedOrigin,
       });
       passiveRequestCount += 1;
@@ -193,6 +228,7 @@ export async function discoverUrls(
       const isUrlSet = /<urlset\b/iu.test(body) && /<\/urlset\s*>/iu.test(body);
       if (!isIndex && !isUrlSet) continue;
       for (const location of extractSitemapLocations(body)) {
+        throwIfAborted(signal, sitemapUrl);
         const normalized = normalizeDiscoveredUrl(
           location,
           new URL(response.finalUrl),
@@ -260,12 +296,14 @@ export async function discoverUrls(
         discoveredUrls.push(item);
         queue.push(item);
       }
-    } catch {
+    } catch (error: unknown) {
+      if (signal?.aborted) throw error;
       // An unavailable or malformed sitemap must not abort URL discovery.
     }
   }
 
   while (queueIndex < queue.length) {
+    throwIfAborted(signal, target.normalizedUrl);
     const current = queue[queueIndex];
     queueIndex += 1;
 
@@ -277,7 +315,7 @@ export async function discoverUrls(
       (requestedCount > 0 || passiveRequestCount > 0) &&
       config.requestDelay > 0
     ) {
-      await delay(config.requestDelay);
+      await waitForDelay(config.requestDelay, signal, current.url);
     }
 
     requestedUrls.add(current.url);
@@ -295,6 +333,7 @@ export async function discoverUrls(
         method: 'GET',
         url: new URL(current.url),
         headers: {},
+        ...(signal === undefined ? {} : { signal }),
         canFollowRedirect: (redirectUrl) => {
           const normalizedRedirect = normalizeDiscoveredUrl(
             redirectUrl.href,
@@ -375,7 +414,8 @@ export async function discoverUrls(
         const nextDepth = current.depth + 1;
 
         if (current.depth < config.crawlDepth) {
-          for (const source of extractScriptSources(response.body)) {
+        for (const source of extractScriptSources(response.body)) {
+          throwIfAborted(signal, current.url);
             const scriptUrl = normalizeDiscoveredUrl(source, baseUrl);
             if (
               scriptUrl === null ||
@@ -393,13 +433,15 @@ export async function discoverUrls(
                 (requestedCount > 0 || passiveRequestCount > 0) &&
                 config.requestDelay > 0
               ) {
-                await delay(config.requestDelay);
+                await waitForDelay(config.requestDelay, signal, scriptUrl.href);
               }
+              throwIfAborted(signal, scriptUrl.href);
               passiveRequestCount += 1;
               const scriptResponse = await client.request({
                 method: 'GET',
                 url: scriptUrl,
                 headers: {},
+                ...(signal === undefined ? {} : { signal }),
                 canFollowRedirect: (redirectUrl) => {
                   const normalizedRedirect = normalizeDiscoveredUrl(
                     redirectUrl.href,
@@ -439,6 +481,7 @@ export async function discoverUrls(
               for (const reference of extractJavaScriptReferences(
                 scriptResponse.body,
               )) {
+                throwIfAborted(signal, scriptFinalUrl);
                 const discoveredUrl = normalizeDiscoveredUrl(
                   reference,
                   scriptBaseUrl,
@@ -450,6 +493,7 @@ export async function discoverUrls(
                 ) {
                   continue;
                 }
+                if (discoveredUrls.length >= MAX_DISCOVERED_URLS) continue;
 
                 const provenance: DiscoveryProvenance = {
                   source: 'javascript',
@@ -499,12 +543,14 @@ export async function discoverUrls(
                   discoveredCount: discoveredUrls.length,
                 });
               }
-            } catch {
+            } catch (error: unknown) {
+              if (signal?.aborted) throw error;
               // JavaScript resources are optional passive metadata.
             }
           }
 
           for (const href of extractAnchorHrefs(response.body)) {
+            throwIfAborted(signal, response.finalUrl);
             const discoveredUrl = normalizeDiscoveredUrl(href, baseUrl);
 
             if (discoveredUrl === null) {
@@ -552,6 +598,13 @@ export async function discoverUrls(
                 };
               }
               skipReason = 'duplicate';
+            }
+
+            if (
+              skipReason === undefined &&
+              discoveredUrls.length >= MAX_DISCOVERED_URLS
+            ) {
+              skipReason = 'limit';
             }
 
             if (skipReason !== undefined) {
@@ -611,7 +664,7 @@ export async function discoverUrls(
         report(options.onEvent, event);
       }
     } catch (error: unknown) {
-      if (!(error instanceof HttpError) || current.depth === 0) {
+      if (signal?.aborted || !(error instanceof HttpError) || current.depth === 0) {
         throw error;
       }
 

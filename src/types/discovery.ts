@@ -84,7 +84,11 @@ export interface DiscoveryResponseReceivedEvent extends DiscoveryProgress {
 }
 
 export type DiscoverySkipReason =
-  'invalid-or-unsupported' | 'out-of-scope' | 'static-resource' | 'duplicate';
+  | 'invalid-or-unsupported'
+  | 'out-of-scope'
+  | 'static-resource'
+  | 'duplicate'
+  | 'limit';
 
 export interface DiscoveryUrlSkippedEvent extends DiscoveryProgress {
   readonly type: 'url-skipped';

@@ -5,7 +5,8 @@ export type HttpErrorCode =
   | 'TLS_FAILURE'
   | 'REDIRECT_LIMIT_EXCEEDED'
   | 'UNSUPPORTED_PROTOCOL'
-  | 'ABORTED';
+  | 'ABORTED'
+  | 'RESPONSE_TOO_LARGE';
 
 export class HttpError extends Error {
   public readonly code: HttpErrorCode;

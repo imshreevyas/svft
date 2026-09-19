@@ -55,7 +55,7 @@ The dependency direction is important: discovery may call HTTP, but HTTP does no
 
 Header precedence is configuration headers, configured User-Agent, then per-request headers. TLS verification is request-local and enabled by default. Redirect following covers 301, 302, 303, 307, and 308 with a configured hop limit. Discovery supplies a redirect predicate so a cross-origin redirect response is returned without sending a request to the foreign origin. URL userinfo is removed before URLs enter persisted target/discovery data.
 
-Retries apply only to safe methods for timeouts and recognized transient transport failures. HTTP statuses, TLS errors, permanent DNS errors, aborts, invalid requests, unsupported protocols, and redirect-limit failures are not automatically retried.
+Retries apply only to safe methods for timeouts and recognized transient transport failures. HTTP statuses, TLS errors, permanent DNS errors, aborts, invalid requests, unsupported protocols, redirect-limit failures, and oversized responses are not automatically retried. HTTP response bodies are capped at 10 MiB before parsing.
 
 ## Discovery Engine
 
@@ -77,7 +77,7 @@ For each eligible HTML response, discovery:
 
 Within the same depth boundary, eligible HTML responses also contribute script `src` values in source order. Same-origin scripts are normalized against the HTML final URL, fetched once through the HTTP Engine, accepted only as JavaScript/plain text (or when no media type is declared), and scanned as text for conservative static URL/path string literals. Candidate validation rejects malformed percent encoding, template/code delimiters, markup-like fragments, invalid dot segments, unmatched delimiters, syntax-ending punctuation, and structurally internal path shapes before URL normalization while retaining numeric and legitimate application routes. References resolve against the script final URL, pass the existing normalization/scope/static-resource rules, and merge into the canonical queue with `javascript` provenance. Scripts are never executed, and a URL already requested as either application content or script metadata is not requested again.
 
-Before normal URL traversal, discovery passively requests same-origin `/robots.txt` once, extracts Sitemap directives (falling back to `/sitemap.xml` when needed), and processes bounded sitemap URL/index documents. External sitemap references and sitemap loops are ignored; sitemap documents are not application endpoints. Internal limits cap processing at 32 sitemap documents and 1,000 sitemap URL entries per scan.
+Before normal URL traversal, discovery passively requests same-origin `/robots.txt` once, extracts Sitemap directives (falling back to `/sitemap.xml` when needed), and processes bounded sitemap URL/index documents. External sitemap references and sitemap loops are ignored; sitemap documents are not application endpoints. Internal limits cap processing at 32 sitemap documents, 1,000 sitemap URL entries, and 10,000 discovered application URLs per scan. Discovery accepts an optional `AbortSignal` and passes it through passive/application requests, retry waits, request delays, parsing checks, and child scheduling.
 
 Fetched URL evidence includes canonical request and response fingerprints. Response bodies are hashed in memory; sensitive headers are excluded from fingerprints.
 

@@ -122,6 +122,46 @@ describe('URL discovery crawler', () => {
     expect(result.discoveredUrls[0]).toEqual(result.seed);
   });
 
+  it('stops before any request when already aborted', async () => {
+    let requests = 0;
+    const server = await track(
+      startHttpServer((_request, response) => {
+        requests += 1;
+        response.end();
+      }),
+    );
+    const controller = new AbortController();
+    controller.abort('test abort');
+
+    await expect(
+      discoverUrls(
+        createTarget(server.origin),
+        createScanConfig({ retries: 0 }),
+        { signal: controller.signal },
+      ),
+    ).rejects.toMatchObject({ code: 'ABORTED' });
+    expect(requests).toBe(0);
+  });
+
+  it('aborts an active discovery request', async () => {
+    const server = await track(
+      startHttpServer(() => {
+        // Keep the request open until the external signal aborts it.
+      }),
+    );
+    const controller = new AbortController();
+    const discovery = discoverUrls(
+      createTarget(server.origin),
+      createScanConfig({ retries: 0, timeout: 5_000 }),
+      { signal: controller.signal },
+    );
+    setTimeout(() => {
+      controller.abort('test abort');
+    }, 20);
+
+    await expect(discovery).rejects.toMatchObject({ code: 'ABORTED' });
+  });
+
   it('requests only the seed at depth 0', async () => {
     const requests: string[] = [];
     const server = await track(
